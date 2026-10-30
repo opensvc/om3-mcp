@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/opensvc/om3-mcp/internal/core"
 )
 
 const (
@@ -103,6 +104,12 @@ func registerTool[In, Out any](registrar *Registrar, tool *mcp.Tool, handler mcp
 			defer cancel()
 			return original(ctx, req, in)
 		}
+	}
+	// Every tool taking a node refuses an unknown one with the next step.
+	explained := handler
+	handler = func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
+		result, out, err := explained(ctx, req, in)
+		return result, out, core.ExplainUnknownNode(err)
 	}
 	mcp.AddTool(registrar.server, tool, handler)
 	registrar.names[tool.Name] = struct{}{}

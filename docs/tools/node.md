@@ -358,7 +358,7 @@ representative:
 | Insufficient daemon grants | Tool error containing daemon HTTP `403` |
 | Empty, oversized, or non-exact `node` | Tool error before the daemon request |
 | Configured node with no published data | Tool error naming the node |
-| Unknown node | Tool error naming the node |
+| Unknown node | Tool error naming the node and `get_cluster_status` |
 | Daemon unavailable or malformed response | Tool error with transport or decoding context |
 
 ### `list_node_properties`
