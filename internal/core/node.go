@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"slices"
 	"sort"
@@ -150,7 +151,7 @@ func (s *Service) GetNodeStatus(ctx context.Context, nodeName string) (NodeStatu
 		if slices.Contains(clusterStatus.Cluster.Config.Nodes, nodeName) {
 			return NodeStatus{}, fmt.Errorf("configured node %q has no published status data", nodeName)
 		}
-		return NodeStatus{}, fmt.Errorf("node %q is not present in the cluster status", nodeName)
+		return NodeStatus{}, fmt.Errorf("node %q is not present in the cluster status: get_cluster_status lists the nodes of the cluster", nodeName)
 	}
 
 	result := NodeStatus{
@@ -226,6 +227,26 @@ const localDaemonNodeAlias = "_"
 // A question on the cluster names no node: the error names where the nodes
 // are, rather than leaving the model to ask the user for one.
 var errNodeTarget = errors.New("node must be one exact OpenSVC node name of at most 255 characters, without wildcard, selector or the _ alias: get_cluster_status lists the nodes of the cluster; for a question on the cluster, call this tool for each of them")
+
+// unknownNodeTitle is the title of the problem the daemon answers, with a
+// 404, for a node it has no status of: a name that is no node of the
+// cluster, or a node whose daemon publishes nothing.
+const unknownNodeTitle = "node status data not found"
+
+// ExplainUnknownNode names, in the refusal of a node the daemon does not
+// know, where the nodes are. On 2026-10-30, with no node named in the
+// conversation, a model called list_daemon_orchestrations with a made-up
+// node, read the 404 of the daemon, and asked the user for a node.
+func ExplainUnknownNode(err error) error {
+	var problem interface {
+		HTTPStatus() int
+		ProblemTitle() string
+	}
+	if errors.As(err, &problem) && problem.HTTPStatus() == http.StatusNotFound && strings.EqualFold(problem.ProblemTitle(), unknownNodeTitle) {
+		return fmt.Errorf("%w: no node of this name reports to the cluster; get_cluster_status lists the nodes of the cluster", err)
+	}
+	return err
+}
 
 // validateNodeTarget requires one exact node name. The daemon resolves the _
 // alias to itself, which is the node carrying the cluster VIP: it would move

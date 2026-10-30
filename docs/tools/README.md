@@ -95,6 +95,17 @@ change on failover. Optional node filters, such as those of
 `list_storage_pools`, `list_cluster_ip_resources` or `list_network_ips`, follow
 the same rule when set.
 
+A name the daemon has no status of, which it answers with a 404
+`node status data not found`, is refused by every tool with the daemon error
+followed by `get_cluster_status lists the nodes of the cluster`, as the
+refusal of an invalid node is. On 2026-10-30, with no node named in the
+conversation, a model gave `list_daemon_orchestrations` a made-up node, read
+the bare 404 and asked the user for a node: replayed 20 times after that
+refusal, it gave up 13 times, and 2 times with the refusal naming
+`get_cluster_status`. Naming `get_cluster_status` in the description of every
+required `node` was left out: it shifted the ranking of `search_tools`, which
+indexes the descriptions of the arguments, for no measured gain.
+
 ## Freshness model
 
 Every successful tool result includes a `provenance` object:
