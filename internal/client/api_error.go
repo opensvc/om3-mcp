@@ -88,3 +88,6 @@ func (e *APIError) HTTPStatus() int { return e.StatusCode }
 
 // ProblemDetail gives the bounded detail of the problem the daemon returned.
 func (e *APIError) ProblemDetail() string { return e.Detail }
+
+// ProblemTitle gives the bounded title of the problem the daemon returned.
+func (e *APIError) ProblemTitle() string { return e.Title }
