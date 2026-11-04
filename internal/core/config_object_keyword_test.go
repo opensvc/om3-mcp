@@ -255,3 +255,46 @@ func TestListObjectConfigKeywordsKeepsTheOptionsAsked(t *testing.T) {
 		}
 	}
 }
+
+// TestConfigKeywordFiltersRefuseAKeywordAsOption refuses a keyword,
+// <section>.<option>, given as an option, before the daemon is called, with
+// the section and the option to give instead: no option name holds a dot,
+// and the daemon would answer no definition.
+func TestConfigKeywordFiltersRefuseAKeywordAsOption(t *testing.T) {
+	tests := map[string]struct {
+		object ListObjectConfigKeywordsOptions
+		node   ListNodeConfigKeywordsOptions
+		says   string
+	}{
+		"option": {
+			object: ListObjectConfigKeywordsOptions{Path: "cluster", Option: "ai.agent_url"},
+			node:   ListNodeConfigKeywordsOptions{Option: "ai.agent_url"},
+			says:   `call again with section "ai" and option "agent_url"`,
+		},
+		"options": {
+			object: ListObjectConfigKeywordsOptions{Path: "cluster", Options: []string{"quorum", "hb#1.timeout"}},
+			node:   ListNodeConfigKeywordsOptions{Options: []string{"quorum", "hb#1.timeout"}},
+			says:   `call again with section "hb#1" and options ["timeout"], one call per section`,
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			client := &recordingJSONGetter{t: t}
+			_, objectErr := New(client).ListObjectConfigKeywords(context.Background(), test.object)
+			_, nodeErr := New(client).ListNodeConfigKeywords(context.Background(), test.node)
+			for _, err := range []error{objectErr, nodeErr} {
+				if err == nil || !strings.Contains(err.Error(), test.says) {
+					t.Errorf("error %v, want %q", err, test.says)
+				}
+			}
+			if client.calls != 0 {
+				t.Errorf("daemon was called %d times", client.calls)
+			}
+		})
+	}
+	for _, name := range []string{"agent_url", ".hidden", "trailing."} {
+		if _, _, ok := keywordParts(name); ok {
+			t.Errorf("keywordParts(%q) is a keyword", name)
+		}
+	}
+}
