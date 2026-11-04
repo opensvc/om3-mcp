@@ -268,6 +268,16 @@ func validateConfigKeywordFilters(options ListObjectConfigKeywordsOptions) (Obje
 		}
 	}
 	sort.Strings(filters.Options)
+	// No option name holds a dot: one written with it is a keyword,
+	// <section>.<option>, such as ai.agent_url, which no option matches.
+	if section, option, ok := keywordParts(filters.Option); ok {
+		return ObjectConfigKeywordFilters{}, 0, "", fmt.Errorf("option %q is a keyword, <section>.<option>, and no option name holds a dot: call again with section %q and option %q", filters.Option, section, option)
+	}
+	for _, value := range filters.Options {
+		if section, option, ok := keywordParts(value); ok {
+			return ObjectConfigKeywordFilters{}, 0, "", fmt.Errorf("options %q is a keyword, <section>.<option>, and no option name holds a dot: call again with section %q and options [%q], one call per section", value, section, option)
+		}
+	}
 	for name, value := range map[string]string{"driver": filters.Driver, "section": filters.Section, "option": filters.Option} {
 		if value == "" {
 			continue
@@ -290,6 +300,17 @@ func validateConfigKeywordFilters(options ListObjectConfigKeywordsOptions) (Obje
 		return ObjectConfigKeywordFilters{}, 0, "", fmt.Errorf("object config keyword cursor exceeds %d characters or contains control characters", maxObjectConfigKeywordCursorRunes)
 	}
 	return filters, limit, options.Cursor, nil
+}
+
+// keywordParts cuts a keyword, <section>.<option>, at its last dot: hb#1.timeout
+// gives hb#1 and timeout. ok is false for a name without a dot, or with an
+// empty part.
+func keywordParts(name string) (section, option string, ok bool) {
+	i := strings.LastIndexByte(name, '.')
+	if i <= 0 || i == len(name)-1 {
+		return "", "", false
+	}
+	return name[:i], name[i+1:], true
 }
 
 func projectObjectConfigKeywordDefinition(raw daemonObjectConfigKeywordDefinition) (ObjectConfigKeywordDefinition, error) {
