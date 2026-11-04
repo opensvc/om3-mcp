@@ -238,7 +238,10 @@ the `options` asked, if any, then applies bounded cursor pagination locally.
 `options`, a list of at most 30 exact option names, is filtered by the MCP,
 not sent to the daemon: it keeps the definitions whose option or one of its
 aliases is asked, and `missing_options` names the options no definition
-holds. With `driver`, one call checks the keywords a resource of that driver
+holds. No option name holds a dot: an `option` or `options` value written as
+a keyword, `<section>.<option>` such as `ai.agent_url`, is refused before the
+daemon is called, the error naming the `section` and the option to give
+instead, as the same filter of `list_node_config_keywords` is. With `driver`, one call checks the keywords a resource of that driver
 uses before `create_object` or `update_object_config` writes them, where
 paging through the catalog of the driver took several calls: the daemon
 writes a keyword it does not know with a warning it does not return. The
