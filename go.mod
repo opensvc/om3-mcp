@@ -14,7 +14,7 @@ require (
 require (
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/opensvc/osvc-auth-mcp v0.5.0
+	github.com/opensvc/osvc-auth-mcp v0.6.0
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
@@ -24,5 +24,3 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
-
-replace github.com/opensvc/osvc-auth-mcp => github.com/hugobrenet/osvc-auth-mcp v0.5.1-0.20261105133012-0b222357a333
