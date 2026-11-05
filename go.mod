@@ -24,3 +24,5 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
+
+replace github.com/opensvc/osvc-auth-mcp => github.com/hugobrenet/osvc-auth-mcp v0.5.1-0.20261105133012-0b222357a333

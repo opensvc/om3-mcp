@@ -116,6 +116,10 @@ a tool call carries the caller's token to the selected cluster VIP. Tools take
 no `cluster_id` argument and `list_clusters` is not offered: the header binds
 each request to one cluster. Each request is authenticated again.
 
+With a collector configured, the resources and the skills are read from it
+with the token exchanged for a collector token, never with the delegated
+token: see [resources and skills](content.md#the-token-of-the-collector).
+
 ## Trust and limits
 
 - Tokens live only in the request context and are never logged, stored or

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -43,6 +44,19 @@ type Config struct {
 	// Actions registers the tools that change the cluster state, on both
 	// listeners. They are left out unless OPENSVC_MCP_ACTIONS is enabled.
 	Actions bool
+	// Collector serves the resources and the skills of the AI assistant the
+	// collector stores, on both listeners; nil without OPENSVC_MCP_COLLECTOR_URL.
+	Collector *Collector
+}
+
+// Collector is the collector API the resources and the skills are read
+// from, with a token of the caller exchanged for Audience with the exchange
+// profile AuthProfile.
+type Collector struct {
+	URL         string
+	CAFile      string
+	Audience    string
+	AuthProfile string
 }
 
 func (c Config) HTTPSEnabled() bool { return c.TLSCertFile != "" }
@@ -83,9 +97,17 @@ func Load() (Config, error) {
 		if cfg.MaxCallsPerMinute, err = callLimit("OPENSVC_MCP_MAX_CALLS_PER_MINUTE", maxPerMinute, mcpauth.DefaultMaxCallsPerMinute, 100000); err != nil {
 			return Config{}, err
 		}
-	} else if listenAddress != "" || oauth != (mcpauth.OAuthConfig{}) || exchangeFile != "" || maxConcurrent != "" || maxPerMinute != "" {
-		return Config{}, fmt.Errorf("OPENSVC_MCP_LISTEN_ADDR, OPENSVC_MCP_OAUTH_*, OPENSVC_MCP_AUTH_CONFIG_FILE and OPENSVC_MCP_MAX_* require the HTTPS listener (OPENSVC_MCP_TLS_CERT_FILE and OPENSVC_MCP_TLS_KEY_FILE)")
+	} else if listenAddress != "" || oauth != (mcpauth.OAuthConfig{}) || maxConcurrent != "" || maxPerMinute != "" {
+		return Config{}, fmt.Errorf("OPENSVC_MCP_LISTEN_ADDR, OPENSVC_MCP_OAUTH_* and OPENSVC_MCP_MAX_* require the HTTPS listener (OPENSVC_MCP_TLS_CERT_FILE and OPENSVC_MCP_TLS_KEY_FILE)")
 	}
+	collector, err := loadCollector()
+	if err != nil {
+		return Config{}, err
+	}
+	if exchangeFile != "" && !cfg.HTTPSEnabled() && collector == nil {
+		return Config{}, fmt.Errorf("OPENSVC_MCP_AUTH_CONFIG_FILE: the exchange profiles require the HTTPS listener (OPENSVC_MCP_TLS_CERT_FILE and OPENSVC_MCP_TLS_KEY_FILE), or OPENSVC_MCP_COLLECTOR_URL")
+	}
+	cfg.Collector = collector
 	if socket := strings.TrimSpace(os.Getenv("OPENSVC_MCP_DELEGATED_SOCKET")); socket != "" {
 		path := filepath.Clean(socket)
 		if !filepath.IsAbs(path) || path == string(filepath.Separator) || len(path) > maxUnixSocketPathBytes {
@@ -134,6 +156,9 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("OPENSVC_MCP_AUTH_CONFIG_FILE: %w", err)
 		}
 	}
+	if cfg.Collector != nil && !cfg.Exchange.Has(cfg.Collector.AuthProfile) {
+		return Config{}, fmt.Errorf("OPENSVC_MCP_COLLECTOR_AUTH_PROFILE names a profile missing from OPENSVC_MCP_AUTH_CONFIG_FILE")
+	}
 	switch actions := strings.TrimSpace(os.Getenv("OPENSVC_MCP_ACTIONS")); actions {
 	case "", "disabled":
 	case "enabled":
@@ -153,6 +178,35 @@ func Load() (Config, error) {
 		}
 	}
 	return cfg, nil
+}
+
+// loadCollector reads the collector settings: none without
+// OPENSVC_MCP_COLLECTOR_URL, else an HTTPS URL, its audience and the exchange
+// profile that exchanges the token of the caller for it.
+func loadCollector() (*Collector, error) {
+	c := &Collector{
+		URL:         strings.TrimSpace(os.Getenv("OPENSVC_MCP_COLLECTOR_URL")),
+		CAFile:      strings.TrimSpace(os.Getenv("OPENSVC_MCP_COLLECTOR_CA_FILE")),
+		Audience:    strings.TrimSpace(os.Getenv("OPENSVC_MCP_COLLECTOR_AUDIENCE")),
+		AuthProfile: strings.TrimSpace(os.Getenv("OPENSVC_MCP_COLLECTOR_AUTH_PROFILE")),
+	}
+	if c.URL == "" {
+		if *c != (Collector{}) {
+			return nil, fmt.Errorf("OPENSVC_MCP_COLLECTOR_* require OPENSVC_MCP_COLLECTOR_URL")
+		}
+		return nil, nil
+	}
+	u, err := url.Parse(c.URL)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return nil, fmt.Errorf("OPENSVC_MCP_COLLECTOR_URL must be an HTTPS URL without credentials, query or fragment, for example https://collector.example.com/api")
+	}
+	if c.CAFile != "" && !filepath.IsAbs(c.CAFile) {
+		return nil, fmt.Errorf("OPENSVC_MCP_COLLECTOR_CA_FILE must be an absolute file path")
+	}
+	if !mcpauth.ValidClaimText(c.Audience) || !mcpauth.ValidClaimText(c.AuthProfile) {
+		return nil, fmt.Errorf("OPENSVC_MCP_COLLECTOR_URL requires OPENSVC_MCP_COLLECTOR_AUDIENCE, the client ID of the collector, and OPENSVC_MCP_COLLECTOR_AUTH_PROFILE, the profile of OPENSVC_MCP_AUTH_CONFIG_FILE exchanging tokens for it")
+	}
+	return c, nil
 }
 
 func validateListenAddress(address string) error {
