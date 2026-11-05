@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/opensvc/om3-mcp/internal/auth"
+	"github.com/opensvc/om3-mcp/internal/content"
 	"github.com/opensvc/osvc-auth-mcp/mcpauth"
 )
 
@@ -75,6 +77,52 @@ func auditToolCalls(next mcp.MethodHandler) mcp.MethodHandler {
 		// empty on the HTTPS listener.
 		attrs = append(attrs, slog.String("request_id", requestIDFromContext(ctx)))
 		auditLogger.LogAttrs(context.Background(), slog.LevelInfo, "mcp tool call", attrs...)
+		return result, err
+	}
+}
+
+// auditContentReads traces each read of the resources and the skills of the
+// collector, a content method: who read, through which client application,
+// on which cluster for the socket, the exchange of the token for a collector
+// token and its outcome. An operator reads there why an exchange fails, such
+// as invalid_grant for the provider of a cluster not federated in the
+// exchange client. It never logs tokens, secrets, parameters or results.
+func auditContentReads(next mcp.MethodHandler) mcp.MethodHandler {
+	return func(ctx context.Context, method string, request mcp.Request) (mcp.Result, error) {
+		if !slices.Contains(content.Methods, method) {
+			return next(ctx, method, request)
+		}
+		identity, _, _ := mcpauth.OAuthFromContext(ctx)
+		clusterID := ""
+		if delegation, _, ok := auth.DelegationFromContext(ctx); ok {
+			identity.Issuer, identity.Subject, clusterID = delegation.Issuer, delegation.Subject, delegation.ClusterID
+		}
+		ctx, trace := mcpauth.WithCallTrace(ctx)
+		start := time.Now()
+		result, err := next(ctx, method, request)
+		exchange := trace.Exchange
+		if exchange == "" {
+			exchange = "none"
+		}
+		outcome := "ok"
+		attrs := []slog.Attr{
+			slog.String("method", method),
+			slog.String("cluster_id", auditValue(clusterID)),
+			slog.String("issuer", identity.Issuer),
+			slog.String("subject", identity.Subject),
+			slog.String("client_id", identity.ClientID),
+			slog.String("exchange", auditValue(exchange)),
+			slog.String("collector_subject", trace.TargetSubject),
+		}
+		if err != nil {
+			outcome = "error"
+		}
+		attrs = append(attrs, slog.String("outcome", outcome), slog.Duration("duration", time.Since(start).Round(time.Millisecond)))
+		if err != nil {
+			attrs = append(attrs, slog.String("detail", auditValue(err.Error())))
+		}
+		attrs = append(attrs, slog.String("request_id", requestIDFromContext(ctx)))
+		auditLogger.LogAttrs(context.Background(), slog.LevelInfo, "mcp content read", attrs...)
 		return result, err
 	}
 }

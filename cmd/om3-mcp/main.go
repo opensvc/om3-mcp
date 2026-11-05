@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"slices"
+	"sync"
 	"syscall"
 	"time"
 
@@ -237,6 +238,28 @@ type collectorContent struct {
 	prepare   func(context.Context) (context.Context, context.CancelFunc, error)
 }
 
+// collectorClients holds the client of each collector configuration, so
+// that both listeners share one connection pool to the collector.
+var collectorClients = struct {
+	sync.Mutex
+	byConfig map[*config.Collector]*client.Client
+}{byConfig: map[*config.Collector]*client.Client{}}
+
+// collectorClient is the client of the collector c, created once.
+func collectorClient(c *config.Collector) (*client.Client, error) {
+	collectorClients.Lock()
+	defer collectorClients.Unlock()
+	if api, ok := collectorClients.byConfig[c]; ok {
+		return api, nil
+	}
+	api, err := client.NewCollector(c.URL, c.CAFile)
+	if err != nil {
+		return nil, fmt.Errorf("configure the collector: %w", err)
+	}
+	collectorClients.byConfig[c] = api
+	return api, nil
+}
+
 // newCollectorContent reads the collector cfg names with the tokens prepare
 // exchanges; nil without a collector.
 func newCollectorContent(cfg config.Config, prepare func(context.Context, *config.Collector) (context.Context, context.CancelFunc, error)) (*collectorContent, error) {
@@ -244,9 +267,9 @@ func newCollectorContent(cfg config.Config, prepare func(context.Context, *confi
 	if c == nil {
 		return nil, nil
 	}
-	api, err := client.NewCollector(c.URL, c.CAFile)
+	api, err := collectorClient(c)
 	if err != nil {
-		return nil, fmt.Errorf("configure the collector: %w", err)
+		return nil, err
 	}
 	return &collectorContent{collector: api, prepare: func(ctx context.Context) (context.Context, context.CancelFunc, error) {
 		return prepare(ctx, c)
@@ -296,8 +319,12 @@ func newToolsHandler(api core.JSONGetter, catalog *clusterconfig.Catalog, router
 	if err != nil {
 		return nil, err
 	}
-	// Every call is audited, even when it is limited or blocked.
+	// Every call is audited, even when it is limited or blocked, and every
+	// read of the content of the collector.
 	middlewares := []mcp.Middleware{auditToolCalls}
+	if source != nil {
+		middlewares = append(middlewares, auditContentReads)
+	}
 	if limiter != nil {
 		middlewares = append(middlewares, limitToolCalls(limiter))
 	}
@@ -381,16 +408,21 @@ func newToolsHandler(api core.JSONGetter, catalog *clusterconfig.Catalog, router
 	})), nil
 }
 
-// limitToolCalls refuses the tool calls of an identity beyond its limits,
-// before any token exchange or daemon request. The audit records them.
+// limitToolCalls refuses the tool calls and the content reads of an
+// identity beyond its limits, before any token exchange, daemon or collector
+// request: a content read exchanges a token and reads the collector as a tool
+// call does. The audit records them.
 func limitToolCalls(limiter *mcpauth.CallLimiter) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, request mcp.Request) (mcp.Result, error) {
-			if method != "tools/call" {
+			if method != "tools/call" && !slices.Contains(content.Methods, method) {
 				return next(ctx, method, request)
 			}
 			release, err := limiter.Acquire(ctx)
 			if err != nil {
+				if method != "tools/call" {
+					return nil, &jsonrpc.Error{Code: jsonrpc.CodeInternalError, Message: err.Error()}
+				}
 				return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}}}, nil
 			}
 			defer release()

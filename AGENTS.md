@@ -121,7 +121,8 @@ or authentication logic in core/tool handlers.
   in-memory cache of `mcpauth`, which the daemon transport clears on HTTP 401
   or 403. The `cmd/om3-mcp/audit.go` middleware logs one
   credential-free line per tool call (identity, client, cluster, tool, exchange
-  and call outcomes); keep it free of tokens, secrets and tool results. Confidential client secrets are snapshotted from protected
+  and call outcomes), and one per content read of the collector (method,
+  identity, cluster, exchange and outcome; limited as the tool calls); keep it free of tokens, secrets and tool results. Confidential client secrets are snapshotted from protected
   files at startup; only public keys and discovery metadata are cached. Bound
   each call by incoming and exchanged token expiry; never rewrite SSO grants.
 - The tool calls of each HTTPS identity are limited (`mcpauth.CallLimiter`,

@@ -88,7 +88,9 @@ for an idle identity. A call beyond a limit fails at once, before any token
 exchange or daemon request, with a tool error that tells the client when to retry;
 the audit line records it as `outcome=tool_error`. The limits protect the SSO
 and the daemons from an authenticated client that loops, such as an agent repeating
-a call. They are not a network protection: limits per address, before
+a call. The reads of the [resources and skills](content.md) of the collector
+count as calls: each exchanges a token and reads the collector; one beyond a
+limit fails with an MCP error. They are not a network protection: limits per address, before
 authentication or for all clients belong to the reverse proxy, gateway or
 firewall in front of the MCP, where every request otherwise carries the address
 of the proxy. The Unix socket is not limited.
