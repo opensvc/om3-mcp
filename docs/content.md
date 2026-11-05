@@ -41,10 +41,21 @@ exchange profile `OPENSVC_MCP_COLLECTOR_AUTH_PROFILE` of
   an exchange on the socket: the daemon tools still receive the delegated
   token unchanged, and the collector never receives it.
 
+On the socket, this changes what leaves the MCP: the delegated token, which
+otherwise reaches only the daemon of its cluster, is also posted to the token
+endpoint of the SSO, as the subject token of the exchange (RFC 8693). The
+exchange client then needs the provider of each cluster federated, or the
+content cannot be read. The exchange refuses a token that still carries the
+audience of the cluster (`delegation.audience`): a collector token never
+reaches a daemon.
+
 The exchanged token follows the rules of the [token exchange](token-exchange.md#token-lifetime-and-failures):
 kept one minute at most in memory, never past the token it was exchanged
 from, forgotten when the collector answers 401 or 403. A refused exchange
-fails the request with the safe message of the exchange.
+fails the request with the safe message of the exchange. Each content read is
+audited, `mcp content read`, with the outcome of the exchange (see the
+[audit trail](token-exchange.md#audit-trail)), and counts in the call limits
+of an HTTPS identity.
 
 In the SSO:
 
