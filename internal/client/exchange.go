@@ -42,7 +42,7 @@ func NewExchange(catalog *clusterconfig.Catalog, profiles *mcpauth.ExchangeProfi
 			TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots, InsecureSkipVerify: cluster.TLSInsecure},
 			TLSHandshakeTimeout: cluster.RequestTimeout, IdleConnTimeout: 90 * time.Second, MaxIdleConns: 2, MaxIdleConnsPerHost: 2,
 		}
-		client := &http.Client{Transport: &exchangedTransport{base: base, clusterID: cluster.ID, origin: cluster.Endpoint}, Timeout: cluster.RequestTimeout,
+		client := &http.Client{Transport: &exchangedTransport{base: base, target: cluster.ID, origin: cluster.Endpoint}, Timeout: cluster.RequestTimeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 		api, err := New(cluster.Endpoint, client)
 		if err != nil {
@@ -74,18 +74,21 @@ func (c *ExchangeClient) selected(ctx context.Context) (*Client, error) {
 	return api, nil
 }
 
+// exchangedTransport sends a request of a target with the token exchanged
+// for it, to its configured origin only: the target is a cluster ID, or
+// CollectorTarget.
 type exchangedTransport struct {
-	base              http.RoundTripper
-	clusterID, origin string
+	base           http.RoundTripper
+	target, origin string
 }
 
 func (t *exchangedTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	id, token, ok := mcpauth.ExchangedFromContext(r.Context())
-	if !ok || id != t.clusterID {
-		return nil, errors.New("daemon request does not match its token exchange")
+	if !ok || id != t.target {
+		return nil, errors.New("request does not match its token exchange")
 	}
 	if r.URL.User != nil || r.URL.Scheme+"://"+r.URL.Host != t.origin || r.Host != "" && r.Host != r.URL.Host {
-		return nil, errors.New("daemon request does not match its configured origin")
+		return nil, errors.New("request does not match its configured origin")
 	}
 	request := r.Clone(r.Context())
 	request.Header.Set("Authorization", "Bearer "+token)

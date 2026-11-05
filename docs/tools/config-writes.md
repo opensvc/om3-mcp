@@ -31,22 +31,23 @@ object namespace; a namespace configuration, `nscfg`, needs the `squatter`
 or `root` role. `force`, which only `root` may use and which overrides the
 protection of a running resource, is not offered.
 
-## The reference of the format: `om3://docs/object-config`
+## The reference of the format: `om3://resources/object-config`
 
-The MCP serves the reference of the configuration file of an object as an
-MCP resource, `om3://docs/object-config`, in Markdown
-([`internal/resources/object_config.md`](../../internal/resources/object_config.md),
-embedded in the binary by the `internal/resources` package), served
-whatever `OPENSVC_MCP_ACTIONS`. Read from the daemon code (`core/xconfig`,
-`core/object`, `core/keyop`) and its keyword catalog, it gives the sections
-of a file, a resource and the driver its `type` selects, the free sections
-`env`, `labels` and `data`, and `subset#`; the syntax of the scopes and of
-the references, with an example of each; three examples; the update
-operators; and what follows a creation, the flag stopped, then
-`provision_object`, which provisions and starts the object. The descriptions of `create_object` and
-`update_object_config` tell the model to read it in the same turn as the
-call: the OpenSVC AI agent keeps no string longer than 256 bytes of the
-earlier turns, so that a reference read in one turn is gone in the next.
+The reference of the configuration file of an object,
+[`docs/object-config.md`](../object-config.md), is no longer embedded: an
+`AIManager` publishes it in the collector as the resource `object-config` for
+the `om3` backend, which the MCP serves as `om3://resources/object-config`
+(see [resources and skills](../content.md)). Read from the daemon code
+(`core/xconfig`, `core/object`, `core/keyop`) and its keyword catalog, it
+gives the sections of a file, a resource and the driver its `type` selects,
+the free sections `env`, `labels` and `data`, and `subset#`; the syntax of the
+scopes and of the references, with an example of each; three examples; the
+update operators; and what follows a creation, the flag stopped, then
+`provision_object`, which provisions and starts the object. The descriptions
+of `create_object` and `update_object_config` tell the model to read it, when
+the server lists it, in the same turn as the call: the OpenSVC AI agent keeps
+no string longer than 256 bytes of the earlier turns, so that a reference read
+in one turn is gone in the next.
 
 A test keeps the examples honest: each section of each example is checked
 against a snapshot of the keyword catalog of the daemon,

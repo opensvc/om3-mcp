@@ -10,7 +10,7 @@ import (
 
 func clearListenerEnvironment(t *testing.T) {
 	t.Helper()
-	for _, name := range []string{"OPENSVC_MCP_LISTEN_ADDR", "OPENSVC_MCP_TLS_CERT_FILE", "OPENSVC_MCP_TLS_KEY_FILE", "OPENSVC_MCP_CLUSTER_CONFIG_FILE", "OPENSVC_MCP_OAUTH_RESOURCE_URL", "OPENSVC_MCP_OAUTH_RESOURCE_NAME", "OPENSVC_MCP_OAUTH_ISSUER", "OPENSVC_MCP_OAUTH_CA_FILE", "OPENSVC_MCP_AUTH_CONFIG_FILE", "OPENSVC_MCP_DELEGATED_SOCKET", "OPENSVC_MCP_MAX_CONCURRENT_CALLS", "OPENSVC_MCP_MAX_CALLS_PER_MINUTE", "OPENSVC_MCP_DELEGATED_CA_FILE"} {
+	for _, name := range []string{"OPENSVC_MCP_LISTEN_ADDR", "OPENSVC_MCP_TLS_CERT_FILE", "OPENSVC_MCP_TLS_KEY_FILE", "OPENSVC_MCP_CLUSTER_CONFIG_FILE", "OPENSVC_MCP_OAUTH_RESOURCE_URL", "OPENSVC_MCP_OAUTH_RESOURCE_NAME", "OPENSVC_MCP_OAUTH_ISSUER", "OPENSVC_MCP_OAUTH_CA_FILE", "OPENSVC_MCP_AUTH_CONFIG_FILE", "OPENSVC_MCP_DELEGATED_SOCKET", "OPENSVC_MCP_MAX_CONCURRENT_CALLS", "OPENSVC_MCP_MAX_CALLS_PER_MINUTE", "OPENSVC_MCP_DELEGATED_CA_FILE", "OPENSVC_MCP_COLLECTOR_URL", "OPENSVC_MCP_COLLECTOR_CA_FILE", "OPENSVC_MCP_COLLECTOR_AUDIENCE", "OPENSVC_MCP_COLLECTOR_AUTH_PROFILE"} {
 		t.Setenv(name, "")
 	}
 	t.Setenv("OPENSVC_MCP_OAUTH_RESOURCE_URL", "https://mcp.example.test/mcp")
@@ -324,4 +324,52 @@ func TestLoadDelegatedCAFile(t *testing.T) {
 			t.Fatal("CA accepted without the socket")
 		}
 	})
+}
+
+// TestLoadCollector reads the collector of the resources and the skills: an
+// HTTPS URL, its audience and an exchange profile, on a socket-only server
+// too, whose exchange profiles then serve the collector alone.
+func TestLoadCollector(t *testing.T) {
+	clearListenerEnvironment(t)
+	t.Setenv("OPENSVC_MCP_OAUTH_RESOURCE_URL", "")
+	t.Setenv("OPENSVC_MCP_OAUTH_ISSUER", "")
+	p := mcpauthtest.NewOAuthProvider(t)
+	t.Setenv("OPENSVC_MCP_DELEGATED_SOCKET", "/run/opensvc-mcp/delegated.sock")
+	t.Setenv("OPENSVC_MCP_CLUSTER_CONFIG_FILE", testutil.WriteClusters(t, map[string]string{"cluster-a": "Example cluster"}))
+	if cfg, err := Load(); err != nil || cfg.Collector != nil {
+		t.Fatalf("no collector: %+v, %v", cfg.Collector, err)
+	}
+	t.Setenv("OPENSVC_MCP_COLLECTOR_AUDIENCE", "collector-client")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "require OPENSVC_MCP_COLLECTOR_URL") {
+		t.Fatalf("a collector audience without URL: %v", err)
+	}
+	t.Setenv("OPENSVC_MCP_COLLECTOR_URL", "https://collector.example.test/api")
+	t.Setenv("OPENSVC_MCP_COLLECTOR_AUTH_PROFILE", "test-sso")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "missing from OPENSVC_MCP_AUTH_CONFIG_FILE") {
+		t.Fatalf("a collector without exchange profiles: %v", err)
+	}
+	t.Setenv("OPENSVC_MCP_AUTH_CONFIG_FILE", mcpauthtest.WriteExchangeProfiles(t, p, "client_secret_basic"))
+	cfg, err := Load()
+	if err != nil || cfg.Collector == nil || cfg.Collector.URL != "https://collector.example.test/api" || cfg.Collector.Audience != "collector-client" || cfg.Collector.AuthProfile != "test-sso" || cfg.Exchange == nil {
+		t.Fatalf("a socket-only server with a collector: %+v, %v", cfg.Collector, err)
+	}
+	for name, change := range map[string][2]string{
+		"http URL":    {"OPENSVC_MCP_COLLECTOR_URL", "http://collector.example.test/api"},
+		"credentials": {"OPENSVC_MCP_COLLECTOR_URL", "https://user:pass@collector.example.test/api"},
+		"query":       {"OPENSVC_MCP_COLLECTOR_URL", "https://collector.example.test/api?x=1"},
+		"no audience": {"OPENSVC_MCP_COLLECTOR_AUDIENCE", ""},
+		"no profile":  {"OPENSVC_MCP_COLLECTOR_AUTH_PROFILE", ""},
+		"unknown":     {"OPENSVC_MCP_COLLECTOR_AUTH_PROFILE", "other"},
+		"relative CA": {"OPENSVC_MCP_COLLECTOR_CA_FILE", "ca.pem"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv(change[0], change[1])
+			if _, err := Load(); err == nil {
+				t.Errorf("%s=%q accepted", change[0], change[1])
+			}
+		})
+	}
+	if p.MetadataCalls.Load() != 0 {
+		t.Fatal("startup contacted the SSO")
+	}
 }

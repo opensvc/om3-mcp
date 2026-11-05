@@ -4,24 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"syscall"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/opensvc/om3-mcp/internal/auth"
 	"github.com/opensvc/om3-mcp/internal/client"
 	"github.com/opensvc/om3-mcp/internal/clusterconfig"
 	"github.com/opensvc/om3-mcp/internal/config"
+	"github.com/opensvc/om3-mcp/internal/content"
 	"github.com/opensvc/om3-mcp/internal/core"
-	"github.com/opensvc/om3-mcp/internal/resources"
-	"github.com/opensvc/om3-mcp/internal/skills"
 	"github.com/opensvc/om3-mcp/internal/tools"
-	skillfiles "github.com/opensvc/om3-mcp/skills"
 	"github.com/opensvc/osvc-auth-mcp/mcpauth"
 )
 
@@ -140,15 +139,23 @@ func newMCPHandler(cfg config.Config) (http.Handler, error) {
 		return nil, fmt.Errorf("configure MCP OAuth: %w", err)
 	}
 	limiter := mcpauth.NewCallLimiter(cfg.MaxConcurrentCalls, cfg.MaxCallsPerMinute)
+	// The resources and the skills are read with the MCP token of the
+	// external client exchanged for a collector token.
+	source, err := newCollectorContent(cfg, func(ctx context.Context, c *config.Collector) (context.Context, context.CancelFunc, error) {
+		return cfg.Exchange.Prepare(ctx, c.AuthProfile, c.Audience, client.CollectorTarget)
+	})
+	if err != nil {
+		return nil, err
+	}
 	var handler http.Handler
 	if catalog := cfg.Clusters.WithAuth(); cfg.Exchange != nil && catalog.Len() > 0 {
 		api, e := client.NewExchange(catalog, cfg.Exchange)
 		if e != nil {
 			return nil, e
 		}
-		handler, err = newConfiguredToolsHandler(api, catalog, api, cfg.Actions, limiter)
+		handler, err = newToolsHandler(api, catalog, api, cfg.Actions, limiter, source)
 	} else {
-		handler, err = newConfiguredToolsHandler(nil, nil, nil, cfg.Actions, limiter)
+		handler, err = newToolsHandler(nil, nil, nil, cfg.Actions, limiter, source)
 	}
 	if err != nil {
 		return nil, err
@@ -185,7 +192,21 @@ func newDelegatedHandler(cfg config.Config) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	handler, err := newConfiguredToolsHandler(api, nil, nil, cfg.Actions, nil)
+	// The resources and the skills are read with the delegated token of the
+	// user, verified for its cluster, exchanged for a collector token: it is
+	// never sent to the collector itself.
+	source, err := newCollectorContent(cfg, func(ctx context.Context, c *config.Collector) (context.Context, context.CancelFunc, error) {
+		delegation, token, ok := auth.DelegationFromContext(ctx)
+		if !ok {
+			return nil, nil, errors.New("token exchange requires a verified delegated token")
+		}
+		identity := mcpauth.OAuthIdentity{Issuer: delegation.Issuer, Subject: delegation.Subject, ExpiresAt: delegation.ExpiresAt, Resource: delegation.Audience}
+		return cfg.Exchange.PrepareSubject(ctx, identity, token, c.AuthProfile, c.Audience, client.CollectorTarget)
+	})
+	if err != nil {
+		return nil, err
+	}
+	handler, err := newToolsHandler(api, nil, nil, cfg.Actions, nil, source)
 	if err != nil {
 		return nil, err
 	}
@@ -208,19 +229,69 @@ func shutdownHTTPServer(server *http.Server, timeout time.Duration) error {
 	return nil
 }
 
-// newConfiguredToolsHandler serves the daemon tools. Its middlewares, from
-// the outermost: the audit line of each call, the limits of the identity
-// (HTTPS only, limiter nil on the socket), then the block of calls without
-// exchange configuration (api nil, HTTPS only).
+// collectorContent serves the resources and the skills the collector
+// stores: collector reads them, prepare exchanges the token of the caller for
+// a collector token, the one collector accepts.
+type collectorContent struct {
+	collector content.Collector
+	prepare   func(context.Context) (context.Context, context.CancelFunc, error)
+}
+
+// newCollectorContent reads the collector cfg names with the tokens prepare
+// exchanges; nil without a collector.
+func newCollectorContent(cfg config.Config, prepare func(context.Context, *config.Collector) (context.Context, context.CancelFunc, error)) (*collectorContent, error) {
+	c := cfg.Collector
+	if c == nil {
+		return nil, nil
+	}
+	api, err := client.NewCollector(c.URL, c.CAFile)
+	if err != nil {
+		return nil, fmt.Errorf("configure the collector: %w", err)
+	}
+	return &collectorContent{collector: api, prepare: func(ctx context.Context) (context.Context, context.CancelFunc, error) {
+		return prepare(ctx, c)
+	}}, nil
+}
+
+// exchangeForContent runs the content methods with a collector token: an
+// exchange that fails is an MCP error naming only the safe message of the
+// exchange.
+func exchangeForContent(source *collectorContent) mcp.Middleware {
+	return func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, request mcp.Request) (mcp.Result, error) {
+			if !slices.Contains(content.Methods, method) {
+				return next(ctx, method, request)
+			}
+			exchanged, cancel, err := source.prepare(ctx)
+			if err != nil {
+				return nil, &jsonrpc.Error{Code: jsonrpc.CodeInternalError, Message: "the collector could not be read: " + err.Error()}
+			}
+			defer cancel()
+			return next(exchanged, method, request)
+		}
+	}
+}
+
+// newConfiguredToolsHandler serves the daemon tools, without the resources
+// and the skills of a collector.
 func newConfiguredToolsHandler(api core.JSONGetter, catalog *clusterconfig.Catalog, router tools.ClusterRouter, actions bool, limiter *mcpauth.CallLimiter) (http.Handler, error) {
+	return newToolsHandler(api, catalog, router, actions, limiter, nil)
+}
+
+// newToolsHandler serves the daemon tools, and the resources and the skills
+// of source when it is set. Its middlewares, from the outermost: the audit
+// line of each call, the limits of the identity (HTTPS only, limiter nil on
+// the socket), the block of calls without exchange configuration (api nil,
+// HTTPS only), then the exchange of the token of the content methods.
+func newToolsHandler(api core.JSONGetter, catalog *clusterconfig.Catalog, router tools.ClusterRouter, actions bool, limiter *mcpauth.CallLimiter, source *collectorContent) (http.Handler, error) {
 	service := core.New(api)
-	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: serverVersion}, &mcp.ServerOptions{
-		Capabilities: &mcp.ServerCapabilities{
-			Tools: &mcp.ToolCapabilities{}, Resources: &mcp.ResourceCapabilities{},
-			// The skills are read as resources; no directory read is served.
-			Extensions: map[string]any{skills.Extension: map[string]any{"directoryRead": false}},
-		},
-	})
+	capabilities := &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{}}
+	if source != nil {
+		// The skills are read as resources; no directory read is served.
+		capabilities.Resources = &mcp.ResourceCapabilities{}
+		capabilities.Extensions = map[string]any{content.Extension: map[string]any{"directoryRead": false}}
+	}
+	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: serverVersion}, &mcp.ServerOptions{Capabilities: capabilities})
 	registrar, err := tools.NewRegistrar(server)
 	if err != nil {
 		return nil, err
@@ -278,15 +349,12 @@ func newConfiguredToolsHandler(api core.JSONGetter, catalog *clusterconfig.Catal
 			return nil, err
 		}
 	}
-	if err := resources.Register(server); err != nil {
-		return nil, err
-	}
-	skillCatalog, err := fs.Sub(skillfiles.FS, "catalog")
-	if err != nil {
-		return nil, err
-	}
-	if err := skills.Register(server, skillCatalog); err != nil {
-		return nil, err
+	if source != nil {
+		// Registered first, its middleware runs innermost: after the
+		// exchange of the token.
+		if err := content.Register(server, source.collector); err != nil {
+			return nil, err
+		}
 	}
 	if api == nil {
 		// Without exchange configuration, tools remain discoverable but blocked.
@@ -299,6 +367,9 @@ func newConfiguredToolsHandler(api core.JSONGetter, catalog *clusterconfig.Catal
 				return next(ctx, method, request)
 			}
 		})
+	}
+	if source != nil {
+		middlewares = append(middlewares, exchangeForContent(source))
 	}
 	server.AddReceivingMiddleware(middlewares...)
 	// Tools require no persistent protocol session. Authentication is checked on

@@ -14,11 +14,15 @@
 | OPENSVC_MCP_OAUTH_ISSUER | empty | Exact trusted issuer for incoming MCP access JWTs; required with HTTPS |
 | OPENSVC_MCP_OAUTH_CA_FILE | empty | Optional absolute PEM trust bundle for SSO HTTPS; replaces system roots |
 | OPENSVC_MCP_DELEGATED_CA_FILE | empty | Optional absolute PEM trust bundle for the OpenID providers of the clusters of the Unix socket, replacing the system roots; without it, the socket uses `OPENSVC_MCP_OAUTH_CA_FILE` when the HTTPS listener has one, else the system roots. Requires the socket |
-| OPENSVC_MCP_AUTH_CONFIG_FILE | empty | Version 1 confidential SSO profile file; required when a cluster sets `auth` |
+| OPENSVC_MCP_AUTH_CONFIG_FILE | empty | Version 1 confidential SSO profile file; required when a cluster sets `auth`, and with the collector |
 | OPENSVC_MCP_CLUSTER_CONFIG_FILE | empty | Cluster catalogue; required for the Unix socket and for exchanged daemon calls |
 | OPENSVC_MCP_DELEGATED_SOCKET | empty | Absolute Unix socket path, at most 103 bytes; enables the delegated listener |
 | OPENSVC_MCP_MAX_CONCURRENT_CALLS | 10 | Tool calls in progress of one identity on HTTPS; 0 disables the limit. See [call limits](#call-limits) |
 | OPENSVC_MCP_MAX_CALLS_PER_MINUTE | 120 | Tool calls per minute of one identity on HTTPS, with a burst of 30; 0 disables the limit |
+| OPENSVC_MCP_COLLECTOR_URL | empty | HTTPS URL of the collector API, such as `https://collector.example.com/api`, whose resources and skills the MCP serves; see [resources and skills](content.md) |
+| OPENSVC_MCP_COLLECTOR_AUDIENCE | empty | Client ID of the collector, the audience of the exchanged tokens; required with the collector |
+| OPENSVC_MCP_COLLECTOR_AUTH_PROFILE | empty | Profile of `OPENSVC_MCP_AUTH_CONFIG_FILE` exchanging the tokens of the callers for collector tokens; required with the collector |
+| OPENSVC_MCP_COLLECTOR_CA_FILE | empty | Optional absolute PEM trust bundle of the collector, replacing the system roots |
 | OPENSVC_MCP_ACTIONS | disabled | `enabled` registers the [action tools](tools/actions.md), which change the cluster state, on both listeners; `disabled` leaves them out |
 
 The MCP has two optional listeners; configure at least one:
@@ -27,11 +31,12 @@ The MCP has two optional listeners; configure at least one:
   requires OAuth. Daemon calls use RFC 8693 token exchange for the clusters
   configured with `auth`. Without exchange, incoming OAuth and tool discovery
   work, but daemon calls remain blocked. `OPENSVC_MCP_LISTEN_ADDR`, the OAuth
-  variables, `OPENSVC_MCP_AUTH_CONFIG_FILE` and `OPENSVC_MCP_MAX_*` are
-  refused without HTTPS.
+  variables and `OPENSVC_MCP_MAX_*` are refused without HTTPS, and
+  `OPENSVC_MCP_AUTH_CONFIG_FILE` without HTTPS nor a collector.
 - **Unix socket** for OpenSVC components such as the AI agent, enabled by
   `OPENSVC_MCP_DELEGATED_SOCKET`. It requires the catalogue, with the OpenID
-  provider of each cluster (`delegation`), but no confidential SSO profile.
+  provider of each cluster (`delegation`), but no confidential SSO profile,
+  except with a collector, whose tokens it exchanges.
 
 See [authentication](authentication.md) and [token delegation](delegation.md)
 for the complete contracts.
