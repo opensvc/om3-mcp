@@ -181,6 +181,24 @@ INFO mcp tool call tool=get_node_status cluster_id=00000000-0000-4000-8000-00000
 | `duration` | Total call duration, including exchange and daemon requests |
 | `request_id` | On the Unix socket, the `X-Request-ID` the AI agent sends, which its own audit lines carry; empty on HTTPS, or when absent or not 32 lowercase hexadecimal characters |
 
+With a collector, every read of its [resources and skills](content.md),
+`resources/list`, `resources/read`, `skills/list` or `skills/get`, emits one
+`INFO` line `mcp content read`, on both listeners:
+
+```text
+INFO mcp content read method=resources/list cluster_id=00000000-0000-4000-8000-000000000001 issuer=https://sso.example.com/application/o/opensvc-cluster-a/ subject=<sub> client_id="" exchange=ok collector_subject=<sub> outcome=ok duration=148ms request_id=<id>
+```
+
+| Field | Meaning |
+|---|---|
+| `method` | The MCP method |
+| `cluster_id` | On the Unix socket, the cluster of the delegated token; empty on HTTPS |
+| `issuer`, `subject`, `client_id` | The verified identity of the caller, as for a tool call |
+| `exchange` | `ok`, `none` when no exchange was attempted, or the safe error of the exchange, such as `token exchange refused by SSO (invalid_grant)`: on the socket, the provider of the cluster is not federated in the exchange client |
+| `collector_subject` | Subject of the collector token, to correlate with the collector logs |
+| `outcome`, `detail` | `ok` or `error`, with the error returned to the client |
+| `duration`, `request_id` | As for a tool call |
+
 On the [Unix socket](delegation.md), every `GET /mcp/auth/whoami` emits one
 `INFO` line `mcp whoami`:
 

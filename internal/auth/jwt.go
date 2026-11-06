@@ -56,6 +56,9 @@ type Delegation struct {
 	// Username is the name the daemon derives from the token:
 	// preferred_username, else email, else sub.
 	Username string
+	// Audience is the client ID of the daemon the token is verified for, the
+	// audience a token exchanged from it must not carry.
+	Audience string
 }
 
 // Delegator checks delegated tokens against the clusters of the catalogue,
@@ -126,7 +129,8 @@ func (d *Delegator) Check(raw, clusterID string) (Delegation, error) {
 	if !mcpauth.ValidClaimText(username) {
 		return Delegation{}, errUnauthorized
 	}
-	return Delegation{ClusterID: clusterID, Issuer: parsed.Issuer, Subject: parsed.Subject, ExpiresAt: parsed.ExpiresAt.Time, Username: username}, nil
+	return Delegation{ClusterID: clusterID, Issuer: parsed.Issuer, Subject: parsed.Subject, ExpiresAt: parsed.ExpiresAt.Time, Username: username,
+		Audience: d.providers[clusterID].audience}, nil
 }
 
 func validTarget(value string) bool {
