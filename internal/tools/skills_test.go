@@ -48,7 +48,7 @@ func TestSkillsNameRealTools(t *testing.T) {
 			t.Fatalf("register tools: %v", err)
 		}
 	}
-	paths, err := filepath.Glob("../../skills/catalog/*/SKILL.md")
+	paths, err := filepath.Glob("../../docs/skills/*/SKILL.md")
 	if err != nil || len(paths) == 0 {
 		t.Fatalf("no skill found: %v", err)
 	}

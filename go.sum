@@ -15,8 +15,8 @@ github.com/modelcontextprotocol/go-sdk v1.8.0 h1:KIvahhYqwtbeniWVPs3TcXEA7b8jEtw
 github.com/modelcontextprotocol/go-sdk v1.8.0/go.mod h1:dL7u98E/zjJTGzEq+j30jQ8K2k1mb6LeAH4inEcSGts=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
-github.com/opensvc/osvc-auth-mcp v0.5.0 h1:N/CylhAgBLGYaic6g97czig9cbLW02rD2U7G9Vv2RgE=
-github.com/opensvc/osvc-auth-mcp v0.5.0/go.mod h1:Zec/iyrkRbyTjxVatIPpvhIpSDnJGn0OsaET2M0+8eI=
+github.com/opensvc/osvc-auth-mcp v0.6.0 h1:6IWyQ2LwcSlsOUZUorpg1kEhAVLuetquuRl5EeFFsds=
+github.com/opensvc/osvc-auth-mcp v0.6.0/go.mod h1:Zec/iyrkRbyTjxVatIPpvhIpSDnJGn0OsaET2M0+8eI=
 github.com/pkg/diff v0.0.0-20210226163009-20ebb0f2a09e/go.mod h1:pJLUxLENpZxwdsKMEsNbx1VGcRFpLqf3715MtcvvzbA=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=

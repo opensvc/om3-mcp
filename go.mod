@@ -16,7 +16,7 @@ require (
 require (
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/opensvc/osvc-auth-mcp v0.5.0
+	github.com/opensvc/osvc-auth-mcp v0.6.0
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect

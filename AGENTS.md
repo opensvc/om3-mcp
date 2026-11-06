@@ -60,9 +60,12 @@ shared with `oc3-mcp`.
   instead of repeating that sequence; only its input validation and result
   type are its own. Reuse the existing validators (`validateExactObjectPath`,
   `validExactNodeName`…) rather than writing local rules.
-- `skills`: the Agent Skills, one directory with a `SKILL.md` each under
-  `catalog/`, and their embedding only; `internal/skills` serves them as the
-  MCP Skills extension. See [skills](skills/README.md).
+- `internal/content`: the resources and the Agent Skills the collector
+  stores for the om3 backend, served as MCP resources and as the MCP Skills
+  extension, each request reading the collector with an exchanged token; the
+  MCP embeds none. `docs/object-config.md` and `docs/skills/` keep the texts
+  OpenSVC ships, for an AIManager to publish. See [resources and
+  skills](docs/content.md).
 - `internal/tools`: MCP declarations, schemas, annotations and registrar.
   Handlers stay thin: typed input, one core use case, typed output.
 
@@ -103,8 +106,14 @@ or authentication logic in core/tool handlers.
   `cluster_id`. `/mcp/auth/whoami` exists only on the socket. Socket access
   relies on filesystem permissions. Never fall back between listeners.
   See [token delegation](docs/delegation.md).
-- Runtime target URLs and audiences come only from the catalogue, never caller
-  URLs or HTTP target headers beyond the catalogue cluster ID.
+- The collector receives exchanged collector tokens only, never an MCP or a
+  delegated token: on HTTPS `mcpauth.Prepare` exchanges the MCP token, on the
+  socket `mcpauth.PrepareSubject` the delegated token once verified, for the
+  content methods only (`content.Methods`), with the profile and audience of
+  `OPENSVC_MCP_COLLECTOR_*`. See [resources and skills](docs/content.md).
+- Runtime target URLs and audiences come only from the catalogue, or for the
+  collector from the configuration, never caller URLs or HTTP target headers
+  beyond the catalogue cluster ID.
 - SSO TLS uses system roots or an explicit PEM bundle. Daemon TLS settings
   retain their existing semantics and do not change SSO TLS verification.
 - User tokens are never stored in sessions, shared clients, logs, tool data or
@@ -112,7 +121,8 @@ or authentication logic in core/tool handlers.
   in-memory cache of `mcpauth`, which the daemon transport clears on HTTP 401
   or 403. The `cmd/om3-mcp/audit.go` middleware logs one
   credential-free line per tool call (identity, client, cluster, tool, exchange
-  and call outcomes); keep it free of tokens, secrets and tool results. Confidential client secrets are snapshotted from protected
+  and call outcomes), and one per content read of the collector (method,
+  identity, cluster, exchange and outcome; limited as the tool calls); keep it free of tokens, secrets and tool results. Confidential client secrets are snapshotted from protected
   files at startup; only public keys and discovery metadata are cached. Bound
   each call by incoming and exchanged token expiry; never rewrite SSO grants.
 - The tool calls of each HTTPS identity are limited (`mcpauth.CallLimiter`,

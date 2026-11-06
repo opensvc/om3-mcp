@@ -1,17 +1,11 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
-	"net/http/httptest"
 	"os"
 	"regexp"
-	"slices"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // maxObjectConfigReferenceBytes bounds the reference of the configuration
@@ -28,45 +22,18 @@ const maxObjectConfigReferenceBytes = 16 << 10
 // driver.
 type keywordCatalog map[string]map[string]bool
 
-// The MCP serves the reference of the configuration of an object, beside
-// the files of the skills, in Markdown, whose examples use only keywords the
-// catalog of the daemon gives, a scope only on a keyword that takes one.
-func TestObjectConfigResource(t *testing.T) {
-	handler, err := newConfiguredToolsHandler(nil, nil, nil, false, nil)
+// The reference of the configuration of an object, docs/object-config.md,
+// which an AIManager publishes in the collector as the resource
+// object-config, uses in its examples only keywords the catalog of the daemon
+// gives, a scope only on a keyword that takes one.
+func TestObjectConfigReference(t *testing.T) {
+	text, err := os.ReadFile("../../docs/object-config.md")
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(handler)
-	defer server.Close()
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil).Connect(ctx, &mcp.StreamableClientTransport{Endpoint: server.URL, DisableStandaloneSSE: true}, nil)
-	if err != nil {
-		t.Fatal(err)
+	if len(text) > maxObjectConfigReferenceBytes {
+		t.Fatalf("the reference holds %d bytes", len(text))
 	}
-	defer session.Close()
-
-	list, err := session.ListResources(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	index := slices.IndexFunc(list.Resources, func(resource *mcp.Resource) bool { return resource.URI == "om3://docs/object-config" })
-	if index < 0 || list.Resources[index].MIMEType != "text/markdown" || list.Resources[index].Description == "" {
-		t.Fatalf("resources = %+v", list.Resources)
-	}
-	for _, resource := range list.Resources {
-		if resource.URI != "om3://docs/object-config" && !strings.HasPrefix(resource.URI, "skill://") {
-			t.Errorf("unexpected resource %s", resource.URI)
-		}
-	}
-	read, err := session.ReadResource(ctx, &mcp.ReadResourceParams{URI: "om3://docs/object-config"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(read.Contents) != 1 || read.Contents[0].MIMEType != "text/markdown" || read.Contents[0].Text == "" || len(read.Contents[0].Text) > maxObjectConfigReferenceBytes {
-		t.Fatalf("contents = %d, %d bytes", len(read.Contents), len(read.Contents[0].Text))
-	}
-
 	data, err := os.ReadFile("testdata/keywords.json")
 	if err != nil {
 		t.Fatal(err)
@@ -75,7 +42,7 @@ func TestObjectConfigResource(t *testing.T) {
 	if err := json.Unmarshal(data, &catalog); err != nil {
 		t.Fatal(err)
 	}
-	blocks := regexp.MustCompile("(?s)```ini\n(.*?)```").FindAllStringSubmatch(read.Contents[0].Text, -1)
+	blocks := regexp.MustCompile("(?s)```ini\n(.*?)```").FindAllStringSubmatch(string(text), -1)
 	if len(blocks) < 3 {
 		t.Fatalf("%d examples", len(blocks))
 	}
