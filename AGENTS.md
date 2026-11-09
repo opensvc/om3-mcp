@@ -128,6 +128,8 @@ or authentication logic in core/tool handlers.
 - The tool calls of each HTTPS identity are limited (`mcpauth.CallLimiter`,
   `limitToolCalls`), inside the audit and before any exchange. Network-level
   limits belong to the infrastructure in front of the MCP.
+- A call ends with its HTTP request (`cancelWithRequest`): a client that goes
+  away does not leave a call running for nobody.
 - No embedded authorization server or refresh-token storage. External clients
   handle login and renewal. SSO refusal stops calls with safe errors, without
   privileged account fallback. The daemon validates outgoing signatures, issuer

@@ -28,6 +28,13 @@ func auditToolCalls(next mcp.MethodHandler) mcp.MethodHandler {
 			return next(ctx, method, request)
 		}
 		identity, _, _ := mcpauth.OAuthFromContext(ctx)
+		// On the Unix socket, the cluster comes from the header and the daemon
+		// receives the caller's token unchanged. The middleware verified its
+		// claims before the call: a refused token never reaches this line. It
+		// is read when the call is admitted: the token may expire, or the call
+		// be cancelled, before the call ends, and the line must still name its
+		// caller.
+		delegation, _, delegated := auth.DelegationFromContext(ctx)
 		ctx, trace := mcpauth.WithCallTrace(ctx)
 		start := time.Now()
 		result, err := next(ctx, method, request)
@@ -40,10 +47,7 @@ func auditToolCalls(next mcp.MethodHandler) mcp.MethodHandler {
 		if exchange == "" {
 			exchange = "none"
 		}
-		// On the Unix socket, the cluster comes from the header and the daemon
-		// receives the caller's token unchanged. The middleware verified its
-		// claims before the call: a refused token never reaches this line.
-		if delegation, _, ok := auth.DelegationFromContext(ctx); ok {
+		if delegated {
 			identity.Issuer, identity.Subject = delegation.Issuer, delegation.Subject
 			target.ClusterID, exchange, daemonSubject = delegation.ClusterID, "delegated", delegation.Subject
 		}
