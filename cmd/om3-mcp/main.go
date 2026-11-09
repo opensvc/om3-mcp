@@ -303,7 +303,8 @@ func newConfiguredToolsHandler(api core.JSONGetter, catalog *clusterconfig.Catal
 
 // newToolsHandler serves the daemon tools, and the resources and the skills
 // of source when it is set. Its middlewares, from the outermost: the audit
-// line of each call, the limits of the identity (HTTPS only, limiter nil on
+// line of each call, the cancellation of the call with its HTTP request,
+// the limits of the identity (HTTPS only, limiter nil on
 // the socket), the block of calls without exchange configuration (api nil,
 // HTTPS only), then the exchange of the token of the content methods.
 func newToolsHandler(api core.JSONGetter, catalog *clusterconfig.Catalog, router tools.ClusterRouter, actions bool, limiter *mcpauth.CallLimiter, source *collectorContent) (http.Handler, error) {
@@ -325,6 +326,9 @@ func newToolsHandler(api core.JSONGetter, catalog *clusterconfig.Catalog, router
 	if source != nil {
 		middlewares = append(middlewares, auditContentReads)
 	}
+	// Inside the audit, which reads the caller from a context it has not
+	// cancelled yet: each call ends with its HTTP request.
+	middlewares = append(middlewares, cancelWithRequest)
 	if limiter != nil {
 		middlewares = append(middlewares, limitToolCalls(limiter))
 	}
@@ -403,10 +407,16 @@ func newToolsHandler(api core.JSONGetter, catalog *clusterconfig.Catalog, router
 	// every request; the shared service never holds a user's credentials.
 	// Cross-origin browser requests are refused with 403, as the MCP SDK
 	// recommends, by the protection of net/http around its handler.
-	return http.NewCrossOriginProtection().Handler(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{
-		Stateless: true, JSONResponse: true,
-	})), nil
+	return withRequestContext(http.NewCrossOriginProtection().Handler(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{
+		Stateless: true, JSONResponse: true, PropagateRequestCancellation: true,
+	}))), nil
 }
+
+// codeCallLimited is the JSON-RPC error of a content read refused by the
+// limits of its identity: a server error, not an internal one, so that a
+// client reads a limit to retry after the delay its message gives, not a
+// failure of the server. oc3-mcp answers with the same code.
+const codeCallLimited = -32029
 
 // limitToolCalls refuses the tool calls and the content reads of an
 // identity beyond its limits, before any token exchange, daemon or collector
@@ -421,7 +431,7 @@ func limitToolCalls(limiter *mcpauth.CallLimiter) mcp.Middleware {
 			release, err := limiter.Acquire(ctx)
 			if err != nil {
 				if method != "tools/call" {
-					return nil, &jsonrpc.Error{Code: jsonrpc.CodeInternalError, Message: err.Error()}
+					return nil, &jsonrpc.Error{Code: codeCallLimited, Message: err.Error()}
 				}
 				return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}}}, nil
 			}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/opensvc/om3-mcp/internal/clusterconfig"
 	"github.com/opensvc/om3-mcp/internal/config"
@@ -214,8 +216,10 @@ func TestContentReadsAreLimited(t *testing.T) {
 	if _, err := session.ListResources(t.Context(), nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := session.ListResources(t.Context(), nil); err == nil {
-		t.Fatal("a content read beyond the limit was served")
+	_, err := session.ListResources(t.Context(), nil)
+	var refused *jsonrpc.Error
+	if !errors.As(err, &refused) || refused.Code != codeCallLimited || !strings.Contains(refused.Message, "retry in") {
+		t.Fatalf("a content read beyond the limit was not refused as a limit: %v", err)
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()

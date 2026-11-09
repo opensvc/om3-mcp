@@ -90,10 +90,13 @@ the audit line records it as `outcome=tool_error`. The limits protect the SSO
 and the daemons from an authenticated client that loops, such as an agent repeating
 a call. The reads of the [resources and skills](content.md) of the collector
 count as calls: each exchanges a token and reads the collector; one beyond a
-limit fails with an MCP error. They are not a network protection: limits per address, before
+limit fails with the JSON-RPC server error `-32029`, whose message tells when
+to retry. They are not a network protection: limits per address, before
 authentication or for all clients belong to the reverse proxy, gateway or
 firewall in front of the MCP, where every request otherwise carries the address
-of the proxy. The Unix socket is not limited.
+of the proxy. The Unix socket is not limited. Whatever the listener, the
+process opens at most 64 connections to the collector at once; a request beyond
+them waits for one within its own deadline.
 
 The limits are per identity: more users do not share them, but an identity
 shared by several people or an automation does. The tools of this MCP target
