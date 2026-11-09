@@ -55,7 +55,8 @@ from, forgotten when the collector answers 401 or 403. A refused exchange
 fails the request with the safe message of the exchange. Each content read is
 audited, `mcp content read`, with the outcome of the exchange (see the
 [audit trail](token-exchange.md#audit-trail)), and counts in the call limits
-of an HTTPS identity.
+of an HTTPS identity: one beyond them fails with the JSON-RPC server error
+`-32029`, whose message tells when to retry.
 
 In the SSO:
 

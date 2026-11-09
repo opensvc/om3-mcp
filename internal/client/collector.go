@@ -19,6 +19,14 @@ const (
 	collectorTimeout = 30 * time.Second
 	// maxCollectorCABytes bounds the trust bundle of the collector.
 	maxCollectorCABytes = 1 << 20
+	// maxCollectorConns bounds the connections of the whole process to the
+	// collector, whatever the number of callers: the Unix socket has no call
+	// limiter. A request beyond it waits for a connection, within its own
+	// deadline. It bounds the concurrent requests only because the transport,
+	// with its own TLSClientConfig, speaks HTTP/1.1, one request per
+	// connection: enabling HTTP/2 would multiplex hundreds of requests on one
+	// connection, and this bound would then need a semaphore on the requests.
+	maxCollectorConns = 64
 )
 
 // NewCollector reads the collector API at baseURL, an HTTPS URL such as
@@ -48,6 +56,7 @@ func NewCollector(baseURL, caFile string) (*Client, error) {
 	base := &http.Transport{
 		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots},
 		TLSHandshakeTimeout: 10 * time.Second, IdleConnTimeout: 90 * time.Second, MaxIdleConns: 2, MaxIdleConnsPerHost: 2,
+		MaxConnsPerHost: maxCollectorConns,
 	}
 	httpClient := &http.Client{
 		Transport: &exchangedTransport{base: base, target: CollectorTarget, origin: u.Scheme + "://" + u.Host},
