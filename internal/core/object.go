@@ -58,7 +58,7 @@ func (s *Service) ListClusterObjects(ctx context.Context, options ListClusterObj
 		return ClusterObjectList{}, fmt.Errorf("object list limit must be between 1 and %d", maxListClusterObjectsLimit)
 	}
 
-	var paths []string
+	var paths daemonItems[string]
 	if err := s.client.GetJSON(ctx, "/api/object/path", url.Values{"path": {selector}}, &paths); err != nil {
 		return ClusterObjectList{}, fmt.Errorf("list cluster object paths: %w", err)
 	}

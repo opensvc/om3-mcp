@@ -107,7 +107,7 @@ func (s *Service) ListDNSRecords(ctx context.Context, options ListDNSRecordsOpti
 		return DNSRecordList{}, err
 	}
 
-	var response []daemonDNSRecord
+	var response daemonItems[daemonDNSRecord]
 	if err := s.client.GetJSON(ctx, fmt.Sprintf("/api/node/name/%s/daemon/dns/dump", node), url.Values{}, &response); err != nil {
 		return DNSRecordList{}, fmt.Errorf("list DNS records: %w", err)
 	}
