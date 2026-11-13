@@ -126,3 +126,24 @@ func TestParseClusterObjectReferenceRejectsInvalidPath(t *testing.T) {
 		})
 	}
 }
+
+// Since om3 rc62 the daemon answers the paths a selector matches as a list,
+// {kind, items}: read the same as the bare array of the former daemons.
+func TestListClusterObjectsReadsTheItemsOfAList(t *testing.T) {
+	client := &objectJSONGetter{
+		t:        t,
+		selector: "example/**",
+		payload:  `{"kind":"ObjectPathList","items":["example/svc/cache","example/svc/api","example/svc/cache"]}`,
+	}
+	result, err := New(client).ListClusterObjects(context.Background(), ListClusterObjectsOptions{Selector: "example/**"})
+	if err != nil {
+		t.Fatalf("list cluster objects: %v", err)
+	}
+	paths := make([]string, 0, len(result.Objects))
+	for _, item := range result.Objects {
+		paths = append(paths, item.Path)
+	}
+	if want := []string{"example/svc/api", "example/svc/cache"}; !reflect.DeepEqual(paths, want) {
+		t.Errorf("got paths %v, want %v", paths, want)
+	}
+}

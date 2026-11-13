@@ -119,3 +119,17 @@ func TestListDNSRecordsAcceptsAnEmptyZoneAndRejectsMalformedRecords(t *testing.T
 		t.Fatal("a record without name was accepted")
 	}
 }
+
+// Since om3 rc62 the daemon answers the zone as a list, {kind, items}: read the
+// same as the bare array of the former daemons.
+func TestListDNSRecordsReadsTheItemsOfAList(t *testing.T) {
+	payload := `{"kind":"DNSRecordList","items":` + dnsZonePayload + `}`
+	client := &recordingJSONGetter{t: t, path: "/api/node/name/node-a/daemon/dns/dump", query: url.Values{}, payload: payload}
+	list, err := New(client).ListDNSRecords(context.Background(), ListDNSRecordsOptions{Node: "node-a", Limit: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list.ReportedTotal != 13 || list.Total != 12 || list.Count != 4 {
+		t.Fatalf("unexpected page %+v", list)
+	}
+}
