@@ -60,7 +60,8 @@ func TestListObjectDataKeysAcceptsAnObjectWithoutKeys(t *testing.T) {
 
 type emptyBodyGetter struct{ calls int }
 
-func (g *emptyBodyGetter) GetJSON(context.Context, string, url.Values, any) error {
+func (g *emptyBodyGetter) GetJSON(_ context.Context, path string, _ url.Values, _ any) error {
+	recordRoute("GET", path)
 	g.calls++
 	return fmt.Errorf("decode OpenSVC daemon response: %w", io.EOF)
 }

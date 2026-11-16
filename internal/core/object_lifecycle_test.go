@@ -26,6 +26,7 @@ type lifecycleClient struct {
 }
 
 func (c *lifecycleClient) GetJSON(_ context.Context, path string, query url.Values, output any) error {
+	recordRoute("GET", path)
 	c.reads = append(c.reads, query)
 	if path == "/api/instance" {
 		return json.Unmarshal([]byte(`{"items":[`+c.instances+`]}`), output)
@@ -47,6 +48,7 @@ func (c *lifecycleClient) record(path string, query url.Values, input any) {
 }
 
 func (c *lifecycleClient) PostJSON(_ context.Context, path string, query url.Values, input, output any) error {
+	recordRoute("POST", path)
 	c.record(path, query, input)
 	if c.err != nil {
 		return c.err
@@ -58,6 +60,7 @@ func (c *lifecycleClient) PostJSON(_ context.Context, path string, query url.Val
 }
 
 func (c *lifecycleClient) PostJSONWithHeader(ctx context.Context, path string, query url.Values, input, output any) (http.Header, error) {
+	recordRoute("POST", path)
 	return http.Header{"Om-Last-Modified": {"2026-10-22T12:00:00Z"}}, c.PostJSON(ctx, path, query, input, output)
 }
 

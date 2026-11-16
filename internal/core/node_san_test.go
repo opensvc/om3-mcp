@@ -15,6 +15,7 @@ type sanJSONGetter struct {
 }
 
 func (f *sanJSONGetter) GetJSON(_ context.Context, path string, _ url.Values, output any) error {
+	recordRoute("GET", path)
 	f.calls = append(f.calls, path)
 	payload, ok := f.payloads[path]
 	if !ok {

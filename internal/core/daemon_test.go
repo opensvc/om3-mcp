@@ -15,6 +15,7 @@ type fakeJSONGetter struct {
 }
 
 func (f *fakeJSONGetter) GetJSON(_ context.Context, path string, query url.Values, output any) error {
+	recordRoute("GET", path)
 	f.t.Helper()
 	if path != "/api/cluster/status" {
 		f.t.Errorf("got path %q, want /api/cluster/status", path)

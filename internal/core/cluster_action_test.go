@@ -26,6 +26,7 @@ type clusterActionClient struct {
 }
 
 func (c *clusterActionClient) GetJSON(_ context.Context, path string, _ url.Values, output any) error {
+	recordRoute("GET", path)
 	switch {
 	case path == "/api/cluster/status":
 		body := c.statuses[min(c.statusReads, len(c.statuses)-1)]
@@ -42,6 +43,7 @@ func (c *clusterActionClient) GetJSON(_ context.Context, path string, _ url.Valu
 }
 
 func (c *clusterActionClient) PostJSON(_ context.Context, path string, _ url.Values, _, output any) error {
+	recordRoute("POST", path)
 	c.posts = append(c.posts, path)
 	if c.postErr != nil {
 		return c.postErr

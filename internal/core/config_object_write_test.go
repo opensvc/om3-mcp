@@ -39,16 +39,19 @@ type configWriteClient struct {
 	file     string
 }
 
-func (c *configWriteClient) GetJSON(_ context.Context, _ string, query url.Values, output any) error {
+func (c *configWriteClient) GetJSON(_ context.Context, path string, query url.Values, output any) error {
+	recordRoute("GET", path)
 	c.reads = query
 	return json.Unmarshal([]byte(`{"kind":"KeywordList","items":[`+c.keywords+`]}`), output)
 }
 
-func (c *configWriteClient) GetFile(context.Context, string, url.Values) ([]byte, error) {
+func (c *configWriteClient) GetFile(_ context.Context, path string, _ url.Values) ([]byte, error) {
+	recordRoute("GET", path)
 	return []byte(c.file), nil
 }
 
 func (c *configWriteClient) PatchJSON(_ context.Context, path string, query url.Values, output any) (http.Header, error) {
+	recordRoute("PATCH", path)
 	c.writes++
 	c.path, c.query = path, query
 	if c.err != nil {
@@ -58,6 +61,7 @@ func (c *configWriteClient) PatchJSON(_ context.Context, path string, query url.
 }
 
 func (c *configWriteClient) PostFile(_ context.Context, path string, query url.Values, body []byte) (http.Header, error) {
+	recordRoute("POST", path)
 	c.writes++
 	c.path, c.query, c.body = path, query, string(body)
 	return c.header, c.err

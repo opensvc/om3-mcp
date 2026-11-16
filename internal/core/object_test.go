@@ -16,6 +16,7 @@ type objectJSONGetter struct {
 }
 
 func (f *objectJSONGetter) GetJSON(_ context.Context, path string, query url.Values, output any) error {
+	recordRoute("GET", path)
 	f.t.Helper()
 	f.calls++
 	if path != "/api/object/path" {

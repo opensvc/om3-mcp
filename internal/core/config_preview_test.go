@@ -19,6 +19,7 @@ type previewClient struct {
 }
 
 func (c *previewClient) GetJSON(_ context.Context, path string, query url.Values, output any) error {
+	recordRoute("GET", path)
 	c.reads, c.paths = append(c.reads, query), append(c.paths, path)
 	items := []daemonObjectConfigItem{}
 	for _, item := range c.items {

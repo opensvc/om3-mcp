@@ -1,0 +1,83 @@
+name: Contract
+
+# The operations of the daemon API this MCP calls (contract/routes.txt),
+# as the API it follows describes them (contract/om3-api.yaml), checked
+# against the API of opensvc/om3: its main branch, which its next releases
+# are made of, and its latest release, which clusters run. Daily too: a
+# change of om3 that breaks the MCP is known the day it lands, before any
+# pull request here. The test job of CI checks that contract/routes.txt is
+# the operations the core calls.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [main, latest]
+    # The latest release tells whether the clusters in the field serve the
+    # MCP: a route this MCP starts to use before om3 releases it shows there,
+    # without failing the run; main does.
+    continue-on-error: ${{ matrix.target == 'latest' }}
+    steps:
+      # The actions are pinned by commit: a tag moved does not change what
+      # runs. The token of the checkout is not left in .git/config.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+
+      # With the token of the workflow: the anonymous limit of the GitHub API,
+      # shared by the runners of an address, would fail it now and then.
+      - name: Resolve the om3 reference
+        id: ref
+        env:
+          TARGET: ${{ matrix.target }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ref="$TARGET"
+          if [ "$TARGET" = latest ]; then
+            ref=$(gh api repos/opensvc/om3/releases/latest --jq .tag_name)
+          fi
+          case "$ref" in
+            ""|*[!A-Za-z0-9._/-]*) echo "unexpected om3 reference: $ref"; exit 1 ;;
+          esac
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      # A failure on the latest release leaves the run green: the summary of
+      # the run says it.
+      - name: Check the API of om3
+        env:
+          REF: ${{ steps.ref.outputs.ref }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          status=0
+          contract/check.sh "$REF" > check.out 2>&1 || status=$?
+          cat check.out
+          if [ "$status" -ne 0 ] && [ "$TARGET" = latest ]; then
+            {
+              echo "### The latest release of om3, $REF, breaks operations this MCP uses"
+              echo '```'
+              cat check.out
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$status"

@@ -51,6 +51,7 @@ type instanceActionClient struct {
 }
 
 func (c *instanceActionClient) GetJSON(_ context.Context, path string, query url.Values, output any) error {
+	recordRoute("GET", path)
 	c.reads = append(c.reads, path)
 	switch {
 	case path == "/api/instance":
@@ -82,6 +83,7 @@ func (c *instanceActionClient) GetJSON(_ context.Context, path string, query url
 }
 
 func (c *instanceActionClient) GetSSE(_ context.Context, path string, query url.Values, consume func(string, string, []byte) error) error {
+	recordRoute("GET", path)
 	c.logReads++
 	c.logQuery = query
 	if path != "/api/node/name/n1/log" {
@@ -116,6 +118,7 @@ func (c *instanceActionClient) instanceReads() int {
 }
 
 func (c *instanceActionClient) PostJSON(_ context.Context, path string, query url.Values, _, output any) error {
+	recordRoute("POST", path)
 	c.posts = append(c.posts, path)
 	c.query = query
 	if c.postErr != nil {

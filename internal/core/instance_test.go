@@ -102,6 +102,7 @@ type refreshInstanceClient struct {
 }
 
 func (f *refreshInstanceClient) GetJSON(_ context.Context, path string, query url.Values, output any) error {
+	recordRoute("GET", path)
 	f.t.Helper()
 	f.getCalls++
 	if path != "/api/instance" {
@@ -121,6 +122,7 @@ func (f *refreshInstanceClient) GetJSON(_ context.Context, path string, query ur
 }
 
 func (f *refreshInstanceClient) PostJSON(_ context.Context, path string, query url.Values, input any, output any) error {
+	recordRoute("POST", path)
 	f.t.Helper()
 	if path != "/api/node/name/node-a/instance/path/example/svc/cache/action/status" {
 		return fmt.Errorf("got POST path %q", path)

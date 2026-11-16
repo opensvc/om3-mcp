@@ -19,12 +19,14 @@ type objectActionClient struct {
 	posts    int
 }
 
-func (c *objectActionClient) GetJSON(context.Context, string, url.Values, any) error {
+func (c *objectActionClient) GetJSON(_ context.Context, path string, _ url.Values, _ any) error {
+	recordRoute("GET", path)
 	c.t.Error("an object action must not read before posting")
 	return nil
 }
 
 func (c *objectActionClient) PostJSON(_ context.Context, path string, query url.Values, input any, output any) error {
+	recordRoute("POST", path)
 	c.posts++
 	body := ""
 	if input != nil {
