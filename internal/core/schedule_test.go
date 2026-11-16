@@ -138,6 +138,10 @@ func TestListSchedulesRejectsMalformedDaemonData(t *testing.T) {
 		"invalid node":         `{"kind":"ScheduleList","items":[{"kind":"ScheduleItem","meta":{"node":"node*","object":"lab/svc/app"},"data":{"action":"status","key":"status_schedule","schedule":"@10m"}}]}`,
 		"invalid timestamp":    `{"kind":"ScheduleList","items":[{"kind":"ScheduleItem","meta":{"node":"node-a","object":"lab/svc/app"},"data":{"action":"status","key":"status_schedule","last_run_at":"yesterday","schedule":"@10m"}}]}`,
 		"negative parallel":    `{"kind":"ScheduleList","items":[{"kind":"ScheduleItem","meta":{"node":"node-a","object":"lab/svc/app"},"data":{"action":"status","key":"status_schedule","max_parallel":-1,"schedule":"@10m"}}]}`,
+		// An expression is still bounded and free of control characters.
+		"oversized schedule":       `{"kind":"ScheduleList","items":[{"kind":"ScheduleItem","meta":{"node":"node-a","object":"lab/svc/app"},"data":{"action":"status","key":"status_schedule","schedule":"` + strings.Repeat("@", maxScheduleExpressionRunes+1) + `"}}]}`,
+		"schedule with a control":  `{"kind":"ScheduleList","items":[{"kind":"ScheduleItem","meta":{"node":"node-a","object":"lab/svc/app"},"data":{"action":"status","key":"status_schedule","schedule":"@10m\u0007"}}]}`,
+		"schedule with whitespace": `{"kind":"ScheduleList","items":[{"kind":"ScheduleItem","meta":{"node":"node-a","object":"lab/svc/app"},"data":{"action":"status","key":"status_schedule","schedule":" @10m"}}]}`,
 	}
 	for name, payload := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -165,5 +169,45 @@ func TestListSchedulesRejectsStaleCursor(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "no longer present") {
 		t.Fatalf("got stale cursor error %v", err)
+	}
+}
+
+// A task with no schedule expression is not scheduled, a normal state: said
+// so beside the scheduled ones, at the scope of a node, an object or an
+// instance, which read their entries the same way. On 2026-11-16 the pushbackup of a store of
+// dev5 had none, and list_schedules refused the whole list of the node.
+func TestListSchedulesSaysATaskNotScheduled(t *testing.T) {
+	for scope, test := range map[string]struct {
+		path    string
+		options ListSchedulesOptions
+		object  string
+	}{
+		ScheduleScopeNode:     {path: "/api/node/name/node-a/schedule", options: ListSchedulesOptions{Scope: ScheduleScopeNode, Node: "node-a"}},
+		ScheduleScopeObject:   {path: "/api/object/path/lab/svc/app/schedule", options: ListSchedulesOptions{Scope: ScheduleScopeObject, Path: "lab/svc/app"}, object: "lab/svc/app"},
+		ScheduleScopeInstance: {path: "/api/node/name/node-a/instance/path/lab/svc/app/schedule", options: ListSchedulesOptions{Scope: ScheduleScopeInstance, Path: "lab/svc/app", Node: "node-a"}, object: "lab/svc/app"},
+	} {
+		t.Run(scope, func(t *testing.T) {
+			payload := `{"kind":"ScheduleList","items":[` +
+				`{"kind":"ScheduleItem","meta":{"node":"node-a","object":"` + test.object + `"},"data":{"action":"pushasset","key":"asset.schedule","schedule":"~00:00-06:00"}},` +
+				`{"kind":"ScheduleItem","meta":{"node":"node-a","object":"` + test.object + `"},"data":{"action":"pushbackup","key":"store#mcp.schedule","schedule":""}}]}`
+			client := &recordingJSONGetter{t: t, path: test.path, query: url.Values{}, payload: payload}
+			list, err := New(client).ListSchedules(context.Background(), test.options)
+			if err != nil {
+				t.Fatalf("list schedules: %v", err)
+			}
+			if list.Total != 2 || list.Count != 2 {
+				t.Fatalf("got %d of %d entries, want both: %#v", list.Count, list.Total, list.Schedules)
+			}
+			byAction := map[string]ScheduleEntry{}
+			for _, entry := range list.Schedules {
+				byAction[entry.Action] = entry
+			}
+			if entry := byAction["pushasset"]; !entry.Scheduled || entry.Schedule != "~00:00-06:00" {
+				t.Errorf("scheduled task: %#v", entry)
+			}
+			if entry := byAction["pushbackup"]; entry.Scheduled || entry.Schedule != "" || entry.Key != "store#mcp.schedule" {
+				t.Errorf("task not scheduled: %#v", entry)
+			}
+		})
 	}
 }

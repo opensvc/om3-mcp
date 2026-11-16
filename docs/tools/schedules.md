@@ -44,6 +44,10 @@ cursor pagination. The cursor is tied to the selected scope and entry identity;
 pagination is recalculated from the current daemon response and is not a
 snapshot.
 
+An empty `schedule` is a task OpenSVC does not run on a schedule, such as the
+backup of a store set to none: `scheduled` is `false`, a normal state, not an
+error; it is `true` for every entry with an expression.
+
 `last_run_at` is `null` when an action has never run. `next_run_at` is `null`
 when OpenSVC does not currently publish a next execution. The MCP preserves
 these values and the raw `schedule` and `require` expressions. It does not
@@ -108,6 +112,7 @@ Instance example:
       "key": "status_schedule",
       "action": "status",
       "schedule": "@10m",
+      "scheduled": true,
       "last_run_at": null,
       "next_run_at": "2026-09-28T12:10:00Z",
       "max_parallel": 1,

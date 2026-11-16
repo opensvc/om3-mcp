@@ -260,7 +260,7 @@ flags are distinct from the resource flags in `status`.
 | Schedule field | Meaning |
 |---|---|
 | `key`, `action` | Required configuration key and scheduled action |
-| `schedule` | Required raw schedule expression |
+| `schedule` | Required raw schedule expression; empty when the task is not scheduled |
 | `max_parallel` | Required configured maximum parallel runs |
 | `require` | Optional raw resource requirement |
 | `require_collector`, `require_provisioned` | Required collector and provisioning flags |
