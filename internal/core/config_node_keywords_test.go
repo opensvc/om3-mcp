@@ -23,6 +23,7 @@ type nodeConfigClient struct {
 }
 
 func (c *nodeConfigClient) GetJSON(_ context.Context, path string, query url.Values, output any) error {
+	recordRoute("GET", path)
 	c.reads = append(c.reads, path)
 	c.query = query
 	if strings.HasSuffix(path, "/config/keywords") {
@@ -32,6 +33,7 @@ func (c *nodeConfigClient) GetJSON(_ context.Context, path string, query url.Val
 }
 
 func (c *nodeConfigClient) PatchJSON(_ context.Context, path string, query url.Values, output any) (http.Header, error) {
+	recordRoute("PATCH", path)
 	c.patches++
 	c.patch = query
 	c.reads = append(c.reads, "PATCH "+path)

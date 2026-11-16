@@ -17,13 +17,15 @@ type configFileClient struct {
 	calls   int
 }
 
-func (f *configFileClient) GetJSON(context.Context, string, url.Values, any) error {
+func (f *configFileClient) GetJSON(_ context.Context, path string, _ url.Values, _ any) error {
+	recordRoute("GET", path)
 	f.t.Helper()
 	f.t.Fatal("unexpected JSON request")
 	return nil
 }
 
 func (f *configFileClient) GetFile(_ context.Context, path string, query url.Values) ([]byte, error) {
+	recordRoute("GET", path)
 	f.t.Helper()
 	f.calls++
 	if path != f.path {

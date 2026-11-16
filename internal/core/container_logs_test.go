@@ -19,12 +19,14 @@ type containerLogsClient struct {
 	calls  int
 }
 
-func (f *containerLogsClient) GetJSON(context.Context, string, url.Values, any) error {
+func (f *containerLogsClient) GetJSON(_ context.Context, path string, _ url.Values, _ any) error {
+	recordRoute("GET", path)
 	f.t.Helper()
 	return fmt.Errorf("unexpected JSON request")
 }
 
 func (f *containerLogsClient) GetStream(_ context.Context, path string, query url.Values, consume func([]byte) error) error {
+	recordRoute("GET", path)
 	f.t.Helper()
 	f.calls++
 	if path != f.path {

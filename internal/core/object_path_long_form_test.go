@@ -21,6 +21,7 @@ type rootObjectDaemon struct {
 }
 
 func (d *rootObjectDaemon) GetJSON(_ context.Context, path string, query url.Values, output any) error {
+	recordRoute("GET", path)
 	d.paths = append(d.paths, path)
 	d.queries = append(d.queries, query)
 	payload, ok := d.payloads[path]
@@ -31,6 +32,7 @@ func (d *rootObjectDaemon) GetJSON(_ context.Context, path string, query url.Val
 }
 
 func (d *rootObjectDaemon) GetSSE(_ context.Context, path string, query url.Values, consume func(string, string, []byte) error) error {
+	recordRoute("GET", path)
 	d.paths = append(d.paths, path)
 	d.queries = append(d.queries, query)
 	for _, event := range d.events {

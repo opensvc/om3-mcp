@@ -24,6 +24,7 @@ type daemonActionClient struct {
 }
 
 func (c *daemonActionClient) GetJSON(_ context.Context, path string, _ url.Values, output any) error {
+	recordRoute("GET", path)
 	switch {
 	case path == "/api/cluster/status":
 		c.statusReads++
@@ -39,6 +40,7 @@ func (c *daemonActionClient) GetJSON(_ context.Context, path string, _ url.Value
 }
 
 func (c *daemonActionClient) PostJSON(_ context.Context, path string, _ url.Values, input, output any) error {
+	recordRoute("POST", path)
 	c.posts = append(c.posts, path)
 	data, _ := json.Marshal(input)
 	c.bodies = append(c.bodies, string(data))

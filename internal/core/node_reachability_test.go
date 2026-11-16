@@ -17,13 +17,15 @@ type nodeReachabilityClient struct {
 	calls int
 }
 
-func (f *nodeReachabilityClient) GetJSON(_ context.Context, _ string, _ url.Values, _ any) error {
+func (f *nodeReachabilityClient) GetJSON(_ context.Context, path string, _ url.Values, _ any) error {
+	recordRoute("GET", path)
 	f.t.Helper()
 	f.t.Fatal("unexpected JSON request")
 	return nil
 }
 
 func (f *nodeReachabilityClient) GetNoContent(_ context.Context, path string, query url.Values) error {
+	recordRoute("GET", path)
 	f.t.Helper()
 	f.calls++
 	if path != f.path {

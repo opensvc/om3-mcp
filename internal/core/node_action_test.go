@@ -41,6 +41,7 @@ type nodeActionClient struct {
 }
 
 func (c *nodeActionClient) GetJSON(_ context.Context, path string, query url.Values, output any) error {
+	recordRoute("GET", path)
 	switch {
 	case path == "/api/instance":
 		c.instanceQuery = query
@@ -74,7 +75,8 @@ func (c *nodeActionClient) GetJSON(_ context.Context, path string, query url.Val
 	return fmt.Errorf("unexpected read %s", path)
 }
 
-func (c *nodeActionClient) GetSSE(_ context.Context, _ string, _ url.Values, consume func(string, string, []byte) error) error {
+func (c *nodeActionClient) GetSSE(_ context.Context, path string, _ url.Values, consume func(string, string, []byte) error) error {
+	recordRoute("GET", path)
 	c.logReads++
 	for _, entry := range c.logs {
 		if err := consume("log", "", []byte(entry)); err != nil {
@@ -85,6 +87,7 @@ func (c *nodeActionClient) GetSSE(_ context.Context, _ string, _ url.Values, con
 }
 
 func (c *nodeActionClient) PostJSON(_ context.Context, path string, query url.Values, _, output any) error {
+	recordRoute("POST", path)
 	c.posts = append(c.posts, path)
 	c.postQuery = query
 	if c.postErr != nil {

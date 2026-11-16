@@ -27,16 +27,19 @@ type dataClient struct {
 }
 
 func (c *dataClient) GetJSON(_ context.Context, path string, _ url.Values, output any) error {
+	recordRoute("GET", path)
 	c.gets = append(c.gets, path)
 	return json.Unmarshal([]byte(`{"kind":"DataKeyList","items":[`+c.keys+`]}`), output)
 }
 
 func (c *dataClient) GetBlob(_ context.Context, path string, query url.Values) ([]byte, string, bool, error) {
+	recordRoute("GET", path)
 	c.gets = append(c.gets, path+"?"+query.Encode())
 	return c.blob, c.mediaType, c.whole, nil
 }
 
 func (c *dataClient) PatchJSONBody(_ context.Context, path string, query url.Values, input, _ any) (http.Header, error) {
+	recordRoute("PATCH", path)
 	c.patchPath, c.query = path, query
 	data, _ := json.Marshal(input)
 	var decoded []any
@@ -46,6 +49,7 @@ func (c *dataClient) PatchJSONBody(_ context.Context, path string, query url.Val
 }
 
 func (c *dataClient) PostJSON(_ context.Context, path string, _ url.Values, _, output any) error {
+	recordRoute("POST", path)
 	c.posts = append(c.posts, path)
 	if c.postErr != nil {
 		return c.postErr

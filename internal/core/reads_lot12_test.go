@@ -21,6 +21,7 @@ type readsClient struct {
 }
 
 func (c *readsClient) GetJSON(_ context.Context, path string, query url.Values, output any) error {
+	recordRoute("GET", path)
 	c.paths = append(c.paths, path)
 	c.queries = append(c.queries, query)
 	if err := c.errs[path]; err != nil {
@@ -34,6 +35,7 @@ func (c *readsClient) GetJSON(_ context.Context, path string, query url.Values, 
 }
 
 func (c *readsClient) GetBlob(_ context.Context, path string, query url.Values) ([]byte, string, bool, error) {
+	recordRoute("GET", path)
 	c.paths = append(c.paths, path)
 	c.queries = append(c.queries, query)
 	return c.blob, "application/octet-stream", true, nil
