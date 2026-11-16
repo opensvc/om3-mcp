@@ -316,6 +316,7 @@ func newToolsHandler(api core.JSONGetter, catalog *clusterconfig.Catalog, router
 		capabilities.Extensions = map[string]any{content.Extension: map[string]any{"directoryRead": false}}
 	}
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: serverVersion}, &mcp.ServerOptions{Capabilities: capabilities})
+	tools.SetServerVersion(serverVersion)
 	registrar, err := tools.NewRegistrar(server)
 	if err != nil {
 		return nil, err

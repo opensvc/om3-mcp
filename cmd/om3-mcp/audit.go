@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -61,6 +62,11 @@ func auditToolCalls(next mcp.MethodHandler) mcp.MethodHandler {
 					detail = text.Text
 					break
 				}
+			}
+			// A daemon whose API this MCP does not follow: an outcome of its
+			// own, which the audit is searched by.
+			if strings.HasPrefix(detail, "daemon_incompatible:") {
+				outcome = "daemon_incompatible"
 			}
 		}
 		attrs := []slog.Attr{

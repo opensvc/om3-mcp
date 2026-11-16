@@ -105,11 +105,13 @@ func registerTool[In, Out any](registrar *Registrar, tool *mcp.Tool, handler mcp
 			return original(ctx, req, in)
 		}
 	}
-	// Every tool taking a node refuses an unknown one with the next step.
+	// Every tool taking a node refuses an unknown one with the next step; every
+	// tool says so when the daemon answers in a way this MCP cannot use.
 	explained := handler
+	name := tool.Name
 	handler = func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
 		result, out, err := explained(ctx, req, in)
-		return result, out, core.ExplainUnknownNode(err)
+		return result, out, explainIncompatible(name, core.ExplainUnknownNode(err))
 	}
 	mcp.AddTool(registrar.server, tool, handler)
 	registrar.names[tool.Name] = struct{}{}

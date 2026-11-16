@@ -25,6 +25,10 @@ type APIError struct {
 	Status     string
 	Title      string
 	Detail     string
+	// routed: the body is the {"message": ...} of the router, no RFC 7807
+	// problem of a handler. An empty body, or one not JSON, is not: the
+	// instance handler answers its 404 with no body.
+	routed bool
 }
 
 func (e *APIError) Error() string {
@@ -56,12 +60,14 @@ func newAPIError(method string, path string, response *http.Response) *APIError 
 		return apiError
 	}
 	var problem struct {
-		Title  string `json:"title"`
-		Detail string `json:"detail"`
+		Title   string `json:"title"`
+		Detail  string `json:"detail"`
+		Message string `json:"message"`
 	}
 	if err := json.Unmarshal(body, &problem); err != nil {
 		return apiError
 	}
+	apiError.routed = problem.Message != "" && problem.Title == "" && problem.Detail == ""
 	apiError.Title = normalizeProblemText(problem.Title, maxErrorTitleRunes)
 	apiError.Detail = normalizeProblemText(problem.Detail, maxErrorDetailRunes)
 	return apiError

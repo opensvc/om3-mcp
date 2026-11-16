@@ -41,11 +41,11 @@ func (c *Client) GetSSE(
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return newAPIError(http.MethodGet, path, response)
+		return responseError(http.MethodGet, path, response)
 	}
 	mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if err != nil || mediaType != "text/event-stream" {
-		return fmt.Errorf("OpenSVC daemon %s returned unexpected content type %q", path, response.Header.Get("Content-Type"))
+		return unexpected(http.MethodGet, path, fmt.Sprintf("returned unexpected content type %q", response.Header.Get("Content-Type")))
 	}
 
 	reader := &limitedSSEReader{reader: response.Body, remaining: maxSSEResponseBodySize + 1}
