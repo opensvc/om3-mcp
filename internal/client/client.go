@@ -41,11 +41,11 @@ func (c *Client) GetText(ctx context.Context, path string, query url.Values) ([]
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return nil, newAPIError(http.MethodGet, path, response)
+		return nil, responseError(http.MethodGet, path, response)
 	}
 	mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if err != nil || mediaType != "text/plain" {
-		return nil, fmt.Errorf("OpenSVC daemon %s returned unexpected content type %q", path, response.Header.Get("Content-Type"))
+		return nil, unexpected(http.MethodGet, path, fmt.Sprintf("returned unexpected content type %q", response.Header.Get("Content-Type")))
 	}
 
 	payload, err := io.ReadAll(io.LimitReader(response.Body, maxTextResponseBodySize+1))
@@ -95,10 +95,10 @@ func (c *Client) GetNoContent(ctx context.Context, path string, query url.Values
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return newAPIError(http.MethodGet, path, response)
+		return responseError(http.MethodGet, path, response)
 	}
 	if response.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("OpenSVC daemon %s returned unexpected status %d, want 204", path, response.StatusCode)
+		return unexpected(http.MethodGet, path, fmt.Sprintf("returned unexpected status %d, want 204", response.StatusCode))
 	}
 	return nil
 }
@@ -124,11 +124,11 @@ func (c *Client) GetFile(ctx context.Context, path string, query url.Values) ([]
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return nil, newAPIError(http.MethodGet, path, response)
+		return nil, responseError(http.MethodGet, path, response)
 	}
 	mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/octet-stream" {
-		return nil, fmt.Errorf("OpenSVC daemon %s returned unexpected content type %q", path, response.Header.Get("Content-Type"))
+		return nil, unexpected(http.MethodGet, path, fmt.Sprintf("returned unexpected content type %q", response.Header.Get("Content-Type")))
 	}
 
 	payload, err := io.ReadAll(io.LimitReader(response.Body, maxFileResponseBodySize+1))
@@ -162,7 +162,7 @@ func (c *Client) GetBlob(ctx context.Context, path string, query url.Values) ([]
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return nil, "", false, newAPIError(http.MethodGet, path, response)
+		return nil, "", false, responseError(http.MethodGet, path, response)
 	}
 	payload, err := io.ReadAll(io.LimitReader(response.Body, maxFileResponseBodySize+1))
 	if err != nil {
@@ -203,11 +203,11 @@ func (c *Client) GetStream(ctx context.Context, path string, query url.Values, c
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return newAPIError(http.MethodGet, path, response)
+		return responseError(http.MethodGet, path, response)
 	}
 	mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if err != nil || mediaType != "text/event-stream" {
-		return fmt.Errorf("OpenSVC daemon %s returned unexpected content type %q", path, response.Header.Get("Content-Type"))
+		return unexpected(http.MethodGet, path, fmt.Sprintf("returned unexpected content type %q", response.Header.Get("Content-Type")))
 	}
 
 	reader := io.LimitReader(response.Body, maxStreamResponseBodySize+1)
@@ -253,7 +253,7 @@ func (c *Client) doJSON(ctx context.Context, method string, path string, query u
 	defer response.Body.Close()
 
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return newAPIError(method, path, response)
+		return responseError(method, path, response)
 	}
 
 	if output == nil {
@@ -261,7 +261,7 @@ func (c *Client) doJSON(ctx context.Context, method string, path string, query u
 	}
 	decoder := json.NewDecoder(io.LimitReader(response.Body, maxResponseBodySize))
 	if err := decoder.Decode(output); err != nil {
-		return fmt.Errorf("decode OpenSVC daemon %s response: %w", path, err)
+		return decodeError(method, path, err)
 	}
 	return nil
 }
@@ -307,11 +307,11 @@ func (c *Client) patch(ctx context.Context, path string, query url.Values, paylo
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return response.Header, newAPIError(http.MethodPatch, path, response)
+		return response.Header, responseError(http.MethodPatch, path, response)
 	}
 	if output != nil {
 		if err := json.NewDecoder(io.LimitReader(response.Body, maxResponseBodySize)).Decode(output); err != nil {
-			return response.Header, fmt.Errorf("decode OpenSVC daemon %s response: %w", path, err)
+			return response.Header, decodeError(http.MethodPatch, path, err)
 		}
 	}
 	return response.Header, nil
@@ -335,10 +335,10 @@ func (c *Client) PostFile(ctx context.Context, path string, query url.Values, bo
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return response.Header, newAPIError(http.MethodPost, path, response)
+		return response.Header, responseError(http.MethodPost, path, response)
 	}
 	if response.StatusCode != http.StatusNoContent {
-		return response.Header, fmt.Errorf("OpenSVC daemon %s returned unexpected status %d, want 204", path, response.StatusCode)
+		return response.Header, unexpected(http.MethodPost, path, fmt.Sprintf("returned unexpected status %d, want 204", response.StatusCode))
 	}
 	return response.Header, nil
 }
@@ -400,11 +400,11 @@ func (c *Client) PostJSONWithHeader(ctx context.Context, path string, query url.
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return response.Header, newAPIError(http.MethodPost, path, response)
+		return response.Header, responseError(http.MethodPost, path, response)
 	}
 	if output != nil {
 		if err := json.NewDecoder(io.LimitReader(response.Body, maxResponseBodySize)).Decode(output); err != nil {
-			return response.Header, fmt.Errorf("decode OpenSVC daemon %s response: %w", path, err)
+			return response.Header, decodeError(http.MethodPost, path, err)
 		}
 	}
 	return response.Header, nil
