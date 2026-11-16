@@ -91,7 +91,7 @@ func (s *Service) ListDaemonOrchestrations(ctx context.Context, options ListDaem
 		return DaemonOrchestrationList{}, fmt.Errorf("list daemon orchestrations: %w", err)
 	}
 	if response.Kind != "OrchestrationList" {
-		return DaemonOrchestrationList{}, fmt.Errorf("list daemon orchestrations: unexpected response kind %q", response.Kind)
+		return DaemonOrchestrationList{}, shapeErrorf("list daemon orchestrations: unexpected response kind %q", response.Kind)
 	}
 
 	parsed := make([]parsedDaemonOrchestration, 0, len(response.Items))

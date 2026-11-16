@@ -73,7 +73,7 @@ func (s *Service) ListObjectDataKeys(ctx context.Context, options ListObjectData
 		return ObjectDataKeyList{}, fmt.Errorf("list object data keys: %w", err)
 	}
 	if response.Kind != "DataKeyList" {
-		return ObjectDataKeyList{}, fmt.Errorf("list object data keys: unexpected response kind %q", response.Kind)
+		return ObjectDataKeyList{}, shapeErrorf("list object data keys: unexpected response kind %q", response.Kind)
 	}
 	if len(response.Items) > maxObjectDataKeys {
 		return ObjectDataKeyList{}, fmt.Errorf("list object data keys: response contains %d keys, limit is %d", len(response.Items), maxObjectDataKeys)

@@ -106,7 +106,7 @@ func (s *Service) ListNodeDrivers(ctx context.Context, options ListNodeDriversOp
 		return NodeDriverList{}, fmt.Errorf("list node drivers: %w", err)
 	}
 	if response.Kind != "DriverList" {
-		return NodeDriverList{}, fmt.Errorf("list node drivers: unexpected response kind %q", response.Kind)
+		return NodeDriverList{}, shapeErrorf("list node drivers: unexpected response kind %q", response.Kind)
 	}
 	// The vocabulary comes with the descriptions: a daemon without it gives
 	// the names only.
@@ -129,7 +129,7 @@ func (s *Service) ListNodeDrivers(ctx context.Context, options ListNodeDriversOp
 	byName := make(map[string]NodeDriver, len(response.Items))
 	for index, item := range response.Items {
 		if item.Kind != "DriverItem" {
-			return NodeDriverList{}, fmt.Errorf("list node drivers: item %d has unexpected kind %q", index, item.Kind)
+			return NodeDriverList{}, shapeErrorf("list node drivers: item %d has unexpected kind %q", index, item.Kind)
 		}
 		if !validExactNodeName(item.Meta.Node) {
 			return NodeDriverList{}, fmt.Errorf("list node drivers: item %d reports invalid node %q", index, item.Meta.Node)

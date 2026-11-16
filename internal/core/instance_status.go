@@ -222,8 +222,13 @@ func (s *Service) GetInstanceStatus(ctx context.Context, options GetInstanceStat
 	if err := s.client.GetJSON(ctx, endpoint, url.Values{}, &item); err != nil {
 		return InstanceStatusSnapshot{}, fmt.Errorf("get instance status: %w", err)
 	}
-	if item.Kind != "InstanceItem" || item.Meta.Node != options.Node || item.Meta.Object != reference.Path {
-		return InstanceStatusSnapshot{}, fmt.Errorf("get instance status: unexpected instance kind or identity")
+	// Another kind is an answer of another API; the instance of another node
+	// or object, an inconsistency of the daemon, stays an error of the request.
+	if item.Kind != "InstanceItem" {
+		return InstanceStatusSnapshot{}, shapeErrorf("get instance status: unexpected instance kind")
+	}
+	if item.Meta.Node != options.Node || item.Meta.Object != reference.Path {
+		return InstanceStatusSnapshot{}, fmt.Errorf("get instance status: unexpected instance identity")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(item.Data))
 	decoder.UseNumber()

@@ -141,7 +141,7 @@ func (s *Service) GetObjectConfig(ctx context.Context, options GetObjectConfigOp
 		return ObjectConfig{}, fmt.Errorf("get object config: %w", err)
 	}
 	if response.Kind != "KeywordList" {
-		return ObjectConfig{}, fmt.Errorf("object config returned unexpected kind %q", response.Kind)
+		return ObjectConfig{}, shapeErrorf("object config returned unexpected kind %q", response.Kind)
 	}
 	for _, item := range response.Items {
 		if item.Object != reference.Path {

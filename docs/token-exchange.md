@@ -177,7 +177,7 @@ INFO mcp tool call tool=get_node_status cluster_id=00000000-0000-4000-8000-00000
 | `client_id` | Client application from the incoming `client_id` (RFC 9068) or `azp` claim; empty if absent |
 | `exchange` | `none` when no exchange was attempted (discovery, missing or unknown target), `ok`, the safe error message returned to the client, or `delegated` on the [Unix socket](delegation.md) |
 | `daemon_subject` | Subject of the exchanged token, to correlate with daemon logs; subject modes may differ between providers |
-| `outcome`, `detail` | `ok`, `tool_error` (exchange refusal, daemon refusal such as HTTP 403, or validation error), `daemon_incompatible` (the daemon answered in a way this MCP cannot use: a route it does not know, a response of another shape, another content type; its API moved on and the MCP must be upgraded) or `error` (protocol error); `detail` is the bounded error text already returned to the client |
+| `outcome`, `detail` | `ok`, `tool_error` (exchange refusal, daemon refusal such as HTTP 403, or validation error), `daemon_incompatible` (the daemon answered in a way this MCP cannot use: a route it does not know, a response of another shape, a list or an item of another kind, another content type; its API moved on and the MCP must be upgraded; an item naming another node or object, or a value out of its bounds, stays a `tool_error`) or `error` (protocol error); `detail` is the bounded error text already returned to the client |
 | `duration` | Total call duration, including exchange and daemon requests |
 | `request_id` | On the Unix socket, the `X-Request-ID` the AI agent sends, which its own audit lines carry; empty on HTTPS, or when absent or not 32 lowercase hexadecimal characters |
 

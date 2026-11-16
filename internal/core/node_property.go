@@ -95,7 +95,7 @@ func (s *Service) ListNodeProperties(ctx context.Context, options ListNodeProper
 		return NodePropertyList{}, fmt.Errorf("list node properties: %w", err)
 	}
 	if response.Kind != "PropertyList" {
-		return NodePropertyList{}, fmt.Errorf("list node properties: unexpected response kind %q", response.Kind)
+		return NodePropertyList{}, shapeErrorf("list node properties: unexpected response kind %q", response.Kind)
 	}
 	if len(response.Items) > maxNodePropertyItems {
 		return NodePropertyList{}, fmt.Errorf("list node properties: response contains %d items, limit is %d", len(response.Items), maxNodePropertyItems)
@@ -105,7 +105,7 @@ func (s *Service) ListNodeProperties(ctx context.Context, options ListNodeProper
 	properties := make([]NodeProperty, 0, len(response.Items))
 	for index, raw := range response.Items {
 		if raw.Kind != "PropertyItem" {
-			return NodePropertyList{}, fmt.Errorf("list node properties: item %d has unexpected kind %q", index, raw.Kind)
+			return NodePropertyList{}, shapeErrorf("list node properties: item %d has unexpected kind %q", index, raw.Kind)
 		}
 		if !validExactNodeName(raw.Meta.Node) {
 			return NodePropertyList{}, fmt.Errorf("list node properties: item %d reports invalid node %q", index, raw.Meta.Node)

@@ -120,7 +120,7 @@ func (s *Service) ListNodeDisks(ctx context.Context, options ListNodeDisksOption
 		return NodeDiskList{}, fmt.Errorf("list node disks: %w", err)
 	}
 	if response.Kind != "DiskList" {
-		return NodeDiskList{}, fmt.Errorf("list node disks: unexpected response kind %q", response.Kind)
+		return NodeDiskList{}, shapeErrorf("list node disks: unexpected response kind %q", response.Kind)
 	}
 	if len(response.Items) > maxNodeDiskItems {
 		return NodeDiskList{}, fmt.Errorf("list node disks: response contains %d items, limit is %d", len(response.Items), maxNodeDiskItems)
@@ -129,7 +129,7 @@ func (s *Service) ListNodeDisks(ctx context.Context, options ListNodeDisksOption
 	disks := make([]NodeDisk, 0, len(response.Items))
 	for index, raw := range response.Items {
 		if raw.Kind != "DiskItem" {
-			return NodeDiskList{}, fmt.Errorf("list node disks: item %d has unexpected kind %q", index, raw.Kind)
+			return NodeDiskList{}, shapeErrorf("list node disks: item %d has unexpected kind %q", index, raw.Kind)
 		}
 		if !validExactNodeName(raw.Meta.Node) {
 			return NodeDiskList{}, fmt.Errorf("list node disks: item %d reports invalid node %q", index, raw.Meta.Node)

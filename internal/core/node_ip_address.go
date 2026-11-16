@@ -83,7 +83,7 @@ func (s *Service) ListNodeIPAddresses(ctx context.Context, options ListNodeIPAdd
 		return NodeIPAddressList{}, fmt.Errorf("list node IP addresses: %w", err)
 	}
 	if response.Kind != "IPAddressList" {
-		return NodeIPAddressList{}, fmt.Errorf("list node IP addresses: unexpected response kind %q", response.Kind)
+		return NodeIPAddressList{}, shapeErrorf("list node IP addresses: unexpected response kind %q", response.Kind)
 	}
 	if len(response.Items) > maxNodeIPAddressItems {
 		return NodeIPAddressList{}, fmt.Errorf("list node IP addresses: response contains %d items, limit is %d", len(response.Items), maxNodeIPAddressItems)
@@ -96,7 +96,7 @@ func (s *Service) ListNodeIPAddresses(ctx context.Context, options ListNodeIPAdd
 	entries := make([]entry, 0, len(response.Items))
 	for index, raw := range response.Items {
 		if raw.Kind != "IPAddressItem" {
-			return NodeIPAddressList{}, fmt.Errorf("list node IP addresses: item %d has unexpected kind %q", index, raw.Kind)
+			return NodeIPAddressList{}, shapeErrorf("list node IP addresses: item %d has unexpected kind %q", index, raw.Kind)
 		}
 		if raw.Meta.Node != node {
 			return NodeIPAddressList{}, fmt.Errorf("list node IP addresses: item %d reports unexpected node %q", index, boundedNodeIPText(raw.Meta.Node))

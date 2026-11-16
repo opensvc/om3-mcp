@@ -155,7 +155,7 @@ func (s *Service) listConfigKeywordDefinitions(ctx context.Context, endpoint str
 		return ObjectConfigKeywordDefinitionList{}, fmt.Errorf("read the catalog: %w", err)
 	}
 	if response.Kind != "KeywordDefinitionList" {
-		return ObjectConfigKeywordDefinitionList{}, fmt.Errorf("unexpected response kind %q", response.Kind)
+		return ObjectConfigKeywordDefinitionList{}, shapeErrorf("unexpected response kind %q", response.Kind)
 	}
 	if response.Items == nil {
 		return ObjectConfigKeywordDefinitionList{}, fmt.Errorf("response items must be an array")

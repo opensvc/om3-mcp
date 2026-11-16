@@ -120,7 +120,7 @@ func (s *Service) ListNetworkIPs(ctx context.Context, options ListNetworkIPsOpti
 		return NetworkIPList{}, fmt.Errorf("list network IPs: %w", err)
 	}
 	if response.Kind != "NetworkIPList" {
-		return NetworkIPList{}, fmt.Errorf("list network IPs: unexpected response kind %q", response.Kind)
+		return NetworkIPList{}, shapeErrorf("list network IPs: unexpected response kind %q", response.Kind)
 	}
 	if len(response.Items) > maxNetworkIPItems {
 		return NetworkIPList{}, fmt.Errorf("list network IPs: response contains %d items, limit is %d", len(response.Items), maxNetworkIPItems)

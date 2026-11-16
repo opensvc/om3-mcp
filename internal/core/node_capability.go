@@ -60,13 +60,13 @@ func (s *Service) ListNodeCapabilities(ctx context.Context, options ListNodeCapa
 		return NodeCapabilityList{}, fmt.Errorf("list node capabilities: %w", err)
 	}
 	if response.Kind != "CapabilityList" {
-		return NodeCapabilityList{}, fmt.Errorf("list node capabilities: unexpected response kind %q", response.Kind)
+		return NodeCapabilityList{}, shapeErrorf("list node capabilities: unexpected response kind %q", response.Kind)
 	}
 
 	unique := make(map[string]struct{}, len(response.Items))
 	for index, item := range response.Items {
 		if item.Kind != "CapabilityItem" {
-			return NodeCapabilityList{}, fmt.Errorf("list node capabilities: item %d has unexpected kind %q", index, item.Kind)
+			return NodeCapabilityList{}, shapeErrorf("list node capabilities: item %d has unexpected kind %q", index, item.Kind)
 		}
 		if !validExactNodeName(item.Meta.Node) {
 			return NodeCapabilityList{}, fmt.Errorf("list node capabilities: item %d reports invalid node %q", index, item.Meta.Node)

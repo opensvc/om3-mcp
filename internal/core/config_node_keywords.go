@@ -93,7 +93,7 @@ func (s *Service) GetNodeConfigKeywords(ctx context.Context, options GetNodeConf
 		return NodeConfigKeywords{}, fmt.Errorf("get node config: %w", err)
 	}
 	if response.Kind != "KeywordList" {
-		return NodeConfigKeywords{}, fmt.Errorf("node config returned unexpected kind %q", response.Kind)
+		return NodeConfigKeywords{}, shapeErrorf("node config returned unexpected kind %q", response.Kind)
 	}
 	for _, item := range response.Items {
 		if item.Object != "" || (item.Node != "" && item.Node != options.Node) {
