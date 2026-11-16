@@ -51,7 +51,8 @@ type ScheduleEntry struct {
 	Node               string  `json:"node" jsonschema:"node owning this schedule entry"`
 	Key                string  `json:"key" jsonschema:"configuration key that defines this schedule"`
 	Action             string  `json:"action" jsonschema:"OpenSVC action launched by this schedule"`
-	Schedule           string  `json:"schedule" jsonschema:"raw OpenSVC schedule expression without MCP interpretation"`
+	Schedule           string  `json:"schedule" jsonschema:"raw OpenSVC schedule expression without MCP interpretation; empty when the task is not scheduled"`
+	Scheduled          bool    `json:"scheduled" jsonschema:"false when the task has no schedule expression: OpenSVC does not run it on a schedule, a normal state, not an error"`
 	LastRunAt          *string `json:"last_run_at" jsonschema:"last execution timestamp reported by OpenSVC, or null when the action has never run"`
 	NextRunAt          *string `json:"next_run_at" jsonschema:"next execution timestamp reported by OpenSVC, or null when no next run is scheduled"`
 	MaxParallel        int     `json:"max_parallel" jsonschema:"maximum parallel executions reported by OpenSVC"`
@@ -269,7 +270,11 @@ func projectScheduleEntry(raw daemonScheduleItem, target scheduleTarget) (Schedu
 			return ScheduleEntry{}, err
 		}
 	}
-	if err := validateScheduleString("schedule", raw.Data.Schedule, maxScheduleExpressionRunes, false); err != nil {
+	// A task with no schedule expression is not scheduled, a normal state, as
+	// the pushbackup of a store set to none: on 2026-11-16 a node of dev5
+	// answered one, and the whole list was refused. Oversized or with control
+	// characters, the expression still is.
+	if err := validateScheduleString("schedule", raw.Data.Schedule, maxScheduleExpressionRunes, true); err != nil {
 		return ScheduleEntry{}, err
 	}
 	if err := validateScheduleString("require", raw.Data.Require, maxScheduleExpressionRunes, true); err != nil {
@@ -290,6 +295,7 @@ func projectScheduleEntry(raw daemonScheduleItem, target scheduleTarget) (Schedu
 		Key:                raw.Data.Key,
 		Action:             raw.Data.Action,
 		Schedule:           raw.Data.Schedule,
+		Scheduled:          raw.Data.Schedule != "",
 		LastRunAt:          raw.Data.LastRunAt,
 		NextRunAt:          raw.Data.NextRunAt,
 		MaxParallel:        raw.Data.MaxParallel,
@@ -300,8 +306,11 @@ func projectScheduleEntry(raw daemonScheduleItem, target scheduleTarget) (Schedu
 }
 
 func validateScheduleString(name, value string, maxRunes int, allowEmpty bool) error {
-	if (!allowEmpty && value == "") || value != strings.TrimSpace(value) || len([]rune(value)) > maxRunes || containsControl(value) {
-		return fmt.Errorf("%s is empty, oversized, contains control characters, or has surrounding whitespace", name)
+	if !allowEmpty && value == "" {
+		return fmt.Errorf("%s is empty", name)
+	}
+	if value != strings.TrimSpace(value) || len([]rune(value)) > maxRunes || containsControl(value) {
+		return fmt.Errorf("%s is oversized, contains control characters, or has surrounding whitespace", name)
 	}
 	return nil
 }
