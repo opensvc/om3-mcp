@@ -92,7 +92,7 @@ func (s *Service) ListNodeHardware(ctx context.Context, options ListNodeHardware
 		return NodeHardwareList{}, fmt.Errorf("list node hardware: %w", err)
 	}
 	if response.Kind != "HardwareList" {
-		return NodeHardwareList{}, fmt.Errorf("list node hardware: unexpected response kind %q", response.Kind)
+		return NodeHardwareList{}, shapeErrorf("list node hardware: unexpected response kind %q", response.Kind)
 	}
 	if len(response.Items) > maxNodeHardwareItems {
 		return NodeHardwareList{}, fmt.Errorf("list node hardware: response contains %d items, limit is %d", len(response.Items), maxNodeHardwareItems)
@@ -101,7 +101,7 @@ func (s *Service) ListNodeHardware(ctx context.Context, options ListNodeHardware
 	records := make([]nodeHardwareRecord, 0, len(response.Items))
 	for index, raw := range response.Items {
 		if raw.Kind != "HardwareItem" {
-			return NodeHardwareList{}, fmt.Errorf("list node hardware: item %d has unexpected kind %q", index, raw.Kind)
+			return NodeHardwareList{}, shapeErrorf("list node hardware: item %d has unexpected kind %q", index, raw.Kind)
 		}
 		if !validExactNodeName(raw.Meta.Node) {
 			return NodeHardwareList{}, fmt.Errorf("list node hardware: item %d reports invalid node %q", index, raw.Meta.Node)

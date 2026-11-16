@@ -81,20 +81,20 @@ func (s *Service) GetNodeSANTopology(ctx context.Context, options GetNodeSANTopo
 		return NodeSANTopology{}, fmt.Errorf("get node SAN initiators: %w", err)
 	}
 	if initiatorList.Kind != "SANPathInitiatorList" {
-		return NodeSANTopology{}, fmt.Errorf("get node SAN initiators: unexpected response kind %q", initiatorList.Kind)
+		return NodeSANTopology{}, shapeErrorf("get node SAN initiators: unexpected response kind %q", initiatorList.Kind)
 	}
 	var pathList daemonSANPathList
 	if err := s.client.GetJSON(ctx, fmt.Sprintf("/api/node/name/%s/system/san/path", node), url.Values{}, &pathList); err != nil {
 		return NodeSANTopology{}, fmt.Errorf("get node SAN paths: %w", err)
 	}
 	if pathList.Kind != "SANPathList" {
-		return NodeSANTopology{}, fmt.Errorf("get node SAN paths: unexpected response kind %q", pathList.Kind)
+		return NodeSANTopology{}, shapeErrorf("get node SAN paths: unexpected response kind %q", pathList.Kind)
 	}
 
 	initiators := make([]SANInitiator, 0, len(initiatorList.Items))
 	for index, raw := range initiatorList.Items {
 		if raw.Kind != "SANPathInitiatorItem" {
-			return NodeSANTopology{}, fmt.Errorf("get node SAN initiators: item %d has unexpected kind %q", index, raw.Kind)
+			return NodeSANTopology{}, shapeErrorf("get node SAN initiators: item %d has unexpected kind %q", index, raw.Kind)
 		}
 		if !validExactNodeName(raw.Meta.Node) {
 			return NodeSANTopology{}, fmt.Errorf("get node SAN initiators: item %d reports invalid node %q", index, raw.Meta.Node)

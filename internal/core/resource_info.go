@@ -101,7 +101,7 @@ func (s *Service) ListResourceInfo(ctx context.Context, options ListResourceInfo
 		return ResourceInfoList{}, fmt.Errorf("list resource info: %w", err)
 	}
 	if response.Kind != "ResourceInfoList" {
-		return ResourceInfoList{}, fmt.Errorf("list resource info: unexpected response kind %q", response.Kind)
+		return ResourceInfoList{}, shapeErrorf("list resource info: unexpected response kind %q", response.Kind)
 	}
 	if response.Items == nil {
 		return ResourceInfoList{}, fmt.Errorf("list resource info: response items must be an array")

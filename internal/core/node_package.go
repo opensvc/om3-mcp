@@ -95,7 +95,7 @@ func (s *Service) ListNodePackages(ctx context.Context, options ListNodePackages
 		return NodePackageList{}, fmt.Errorf("list node packages: %w", err)
 	}
 	if response.Kind != "PackageList" {
-		return NodePackageList{}, fmt.Errorf("list node packages: unexpected response kind %q", response.Kind)
+		return NodePackageList{}, shapeErrorf("list node packages: unexpected response kind %q", response.Kind)
 	}
 	if len(response.Items) > maxNodePackageItems {
 		return NodePackageList{}, fmt.Errorf("list node packages: response contains %d items, limit is %d", len(response.Items), maxNodePackageItems)
@@ -104,7 +104,7 @@ func (s *Service) ListNodePackages(ctx context.Context, options ListNodePackages
 	records := make([]nodePackageRecord, 0, len(response.Items))
 	for index, raw := range response.Items {
 		if raw.Kind != "PackageItem" {
-			return NodePackageList{}, fmt.Errorf("list node packages: item %d has unexpected kind %q", index, raw.Kind)
+			return NodePackageList{}, shapeErrorf("list node packages: item %d has unexpected kind %q", index, raw.Kind)
 		}
 		if !validExactNodeName(raw.Meta.Node) {
 			return NodePackageList{}, fmt.Errorf("list node packages: item %d reports invalid node %q", index, raw.Meta.Node)

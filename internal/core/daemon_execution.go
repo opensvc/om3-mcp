@@ -114,7 +114,7 @@ func (s *Service) ListDaemonExecutions(ctx context.Context, options ListDaemonEx
 		return DaemonExecutionList{}, fmt.Errorf("list daemon executions: %w", err)
 	}
 	if response.Kind != "ExecList" {
-		return DaemonExecutionList{}, fmt.Errorf("list daemon executions: unexpected response kind %q", response.Kind)
+		return DaemonExecutionList{}, shapeErrorf("list daemon executions: unexpected response kind %q", response.Kind)
 	}
 
 	parsed := make([]parsedDaemonExecution, 0, len(response.Items))

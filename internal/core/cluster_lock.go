@@ -90,7 +90,7 @@ func (s *Service) readLocks(ctx context.Context, endpoint string) ([]ClusterLock
 		return nil, err
 	}
 	if response.Items == nil && response.Kind == "" {
-		return nil, fmt.Errorf("unexpected daemon response")
+		return nil, shapeErrorf("unexpected daemon response")
 	}
 	locks := make([]ClusterLock, 0, len(response.Items))
 	for _, item := range response.Items {

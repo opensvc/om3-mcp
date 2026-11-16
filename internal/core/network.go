@@ -75,7 +75,7 @@ func (s *Service) ListNetworks(ctx context.Context, options ListNetworksOptions)
 		return NetworkList{}, fmt.Errorf("list networks: %w", err)
 	}
 	if response.Kind != "NetworkList" {
-		return NetworkList{}, fmt.Errorf("list networks: unexpected response kind %q", response.Kind)
+		return NetworkList{}, shapeErrorf("list networks: unexpected response kind %q", response.Kind)
 	}
 
 	networks := make([]Network, 0, min(len(response.Items), maxNetworks))

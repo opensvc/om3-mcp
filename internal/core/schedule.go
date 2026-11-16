@@ -108,7 +108,7 @@ func (s *Service) ListSchedules(ctx context.Context, options ListSchedulesOption
 		return ScheduleList{}, fmt.Errorf("list schedules: %w", err)
 	}
 	if response.Kind != "ScheduleList" {
-		return ScheduleList{}, fmt.Errorf("list schedules: unexpected response kind %q", response.Kind)
+		return ScheduleList{}, shapeErrorf("list schedules: unexpected response kind %q", response.Kind)
 	}
 	if response.Items == nil {
 		return ScheduleList{}, fmt.Errorf("list schedules: response items must be an array")
@@ -245,7 +245,7 @@ func scheduleEndpoint(target scheduleTarget) string {
 
 func projectScheduleEntry(raw daemonScheduleItem, target scheduleTarget) (ScheduleEntry, error) {
 	if raw.Kind != "ScheduleItem" {
-		return ScheduleEntry{}, fmt.Errorf("unexpected kind %q", raw.Kind)
+		return ScheduleEntry{}, shapeErrorf("unexpected kind %q", raw.Kind)
 	}
 	if !validExactNodeName(raw.Meta.Node) {
 		return ScheduleEntry{}, fmt.Errorf("invalid node %q", raw.Meta.Node)
