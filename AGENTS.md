@@ -63,8 +63,9 @@ shared with `oc3-mcp`.
 - `internal/content`: the resources and the Agent Skills the collector
   stores for the om3 backend, served as MCP resources and as the MCP Skills
   extension, each request reading the collector with an exchanged token; the
-  MCP embeds none. `docs/object-config.md` and `docs/skills/` keep the texts
-  OpenSVC ships, for an AIManager to publish. See [resources and
+  MCP embeds none. The skills live in the collector only;
+  `docs/object-config.md` keeps the text of a resource OpenSVC ships, for an
+  AIManager to publish. See [resources and
   skills](docs/content.md).
 - `internal/tools`: MCP declarations, schemas, annotations and registrar.
   Handlers stay thin: typed input, one core use case, typed output.

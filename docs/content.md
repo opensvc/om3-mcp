@@ -81,18 +81,16 @@ alone. No network contact occurs at startup.
 
 ## The objects OpenSVC ships
 
-Two objects were embedded in the MCP before. Their text is kept here, for an
-`AIManager` to publish in the collector:
+The skills live in the collector only: an `AIManager` writes and publishes
+each for the `om3` backend, and the MCP reads it; this repository keeps none.
 
-- [object-config.md](object-config.md), the reference of the configuration
-  file of an object, which the descriptions of `create_object` and
-  `update_object_config` tell the model to read as
-  `om3://resources/object-config` when the server lists it. A test checks its
-  examples against the keyword catalog of the daemon.
-- [skills/node-maintenance/SKILL.md](skills/node-maintenance/SKILL.md), the
-  maintenance of a node. A test checks that the tools its `metadata`
-  `opensvc/tools` lists, and those its body calls, between backticks, are
-  tools of the server, both ways.
+One object was embedded in the MCP before. Its text is kept here, for an
+`AIManager` to publish in the collector:
+[object-config.md](object-config.md), the reference of the configuration
+file of an object, which the descriptions of `create_object` and
+`update_object_config` tell the model to read as
+`om3://resources/object-config` when the server lists it. A test checks its
+examples against the keyword catalog of the daemon.
 
 ```sh
 # COLLECTOR_URL as OPENSVC_MCP_COLLECTOR_URL, TOKEN a collector token of an AIManager
@@ -104,14 +102,8 @@ jq -n --rawfile body docs/object-config.md '{
   body: $body
 }' | curl -sS -X POST "$COLLECTOR_URL/ai/resources" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" --data-binary @-
-
-jq -n --rawfile body docs/skills/node-maintenance/SKILL.md '{
-  name: "node-maintenance",
-  backends: ["om3"],
-  body: $body
-}' | curl -sS -X POST "$COLLECTOR_URL/ai/skills" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" --data-binary @-
 ```
 
-A later version replaces an object with `PUT` on `/ai/resources/object-config`
-or `/ai/skills/node-maintenance`, the same JSON without `name`.
+A later version replaces it with `PUT` on `/ai/resources/object-config`, the
+same JSON without `name`. A skill is published the same way on `/ai/skills`,
+its whole `SKILL.md` as `body`, and replaced on `/ai/skills/<name>`.
