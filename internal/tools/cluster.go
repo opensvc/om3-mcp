@@ -52,6 +52,7 @@ func RegisterClusterTools(registrar *Registrar, service *core.Service) error {
 			Title: "Get cluster status snapshot",
 			Description: "Read a factual, bounded snapshot of the last-known OpenSVC cluster, node, heartbeat, and visible actor object status. " +
 				"Exact daemon values, source timestamps, counts, and truncation metadata are preserved without MCP health verdicts, issue classification, or remediation advice. " +
+				"Each object lists in instance_monitors its instances whose monitor state is not idle, such as provision failed or start failed, even when the object is down; state_counts.instance_monitor_state counts the instance monitor states of all pages. " +
 				"Use cursors to continue node or actor object pages; this read-only call does not refresh instance drivers. " +
 				"provenance.served_by names the node whose daemon answered, usually the node carrying the cluster VIP. " +
 				"It does not list the cluster locks: list_cluster_locks does. " +

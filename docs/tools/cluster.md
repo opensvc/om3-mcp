@@ -225,12 +225,35 @@ status.
 
 Actor records preserve path, availability, overall, provisioned, frozen,
 placement state and policy, orchestration mode, topology, priority, scope,
-up-instance count, and update timestamp. Paths and scope names are sorted only
+up-instance count, update timestamp, and the instances whose monitor is not
+idle. Paths and scope names are sorted only
 for stable output.
+
+`instance_monitors` lists, for each actor record, the instances whose exact
+monitor state is not `idle`, read from `cluster.node.<node>.instance.<path>`
+of the same snapshot: node, state, state update timestamp, global target
+state and, when the daemon gives one, `state_reason`, sorted by node.
+`state_reason` is the daemon's own words on why an instance is in a failure
+state the state alone does not explain, such as a wait for a hard affinity
+given up; it is cut after 500 characters with `state_reason_truncated`, and
+absent from daemons older than the field. `instance_monitors_total` gives their number before
+the limits. The list holds at most 50 entries per object and 200 per page,
+spent in path order: an orchestration of every instance at once, a cluster
+boot for instance, would otherwise fill a page with up to 10,000 entries.
+An object cut by either limit sets `instance_monitors_truncated`, and the
+page sets `objects.instance_monitors_truncated` when its own limit cut one.
+The three fields are absent when no instance of the object reports a monitor
+other than `idle`: every instance is `idle`, or none reports a monitor.
+Leaving `idle` out only bounds the size: a `provision failed`, a `starting` or
+an unknown state are listed alike, and an instance in failure is visible here
+even when the object's aggregate `overall` is `down`.
 
 `state_counts` groups all visible actors independently by their exact
 `availability`, `overall`, `provisioned`, `frozen`, and `placement_state`
-strings. Empty and previously unknown values remain separate entries. The MCP
+strings. `state_counts.instance_monitor_state` counts the instances of those
+actors that report a monitor, `idle` included, by exact monitor state; it
+covers every page, so a count other than `idle` tells to read the next object
+pages. Empty and previously unknown values remain separate entries. The MCP
 does not merge `up` with `stdby up`, create an `other` bucket, or select
 "problem" objects.
 
@@ -290,8 +313,9 @@ Abbreviated representative output for a two-node cluster:
     "reported_total":5,
     "actor_total":1,
     "count":1,
-    "items":[{"path":"prod/svc/redis","availability":"up","overall":"up","provisioned":"n/a","placement_state":"optimal"}],
-    "state_counts":{"availability":[{"value":"up","count":1}]},
+    "items":[{"path":"prod/svc/redis","availability":"down","overall":"down","provisioned":"false","placement_state":"non-optimal",
+      "instance_monitors":[{"node":"node-a","state":"provision failed","state_updated_at":"2026-09-23T14:58:02.112Z","global_expect":"none"}],"instance_monitors_total":1}],
+    "state_counts":{"availability":[{"value":"down","count":1}],"instance_monitor_state":[{"value":"idle","count":1},{"value":"provision failed","count":1}]},
     "truncated":false
   }
 }
