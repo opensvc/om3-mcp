@@ -74,7 +74,15 @@ absent, `^=` removes it when present or appends it, `<key>[<n>]=<value>`
 inserts it at word `n`, an empty value there removing nothing. It is not
 computed from a value cut to its 4096 characters, nor for an index past the
 words. The keys are matched as the daemon names them, a scoped one with its
-`@<node>` in the keyword, for an object as for a node. Summary key
+`@<node>` in the keyword, for an object as for a node, and a key of `DEFAULT`
+without its section: `DEFAULT.orchestrate` and `orchestrate` name one key,
+whose current value the preview gives under the name of the operation, and
+the second operation on it starts from the first. The section of a key is
+told as om3 tells it: the part before the first dot for `env`, `data` and
+`labels`, before the last dot ahead of the scope for the others, `DEFAULT`
+for a key without a dot, by its exact case: `DEFAULT.a.b` is the key `b` of
+a section `DEFAULT.a`, and `default.orchestrate` is not a key of `DEFAULT`.
+Summary key
 `config_update`, params `path`, `sets`, `unsets`, `deletes`.
 
 ### `preview_node_config_update`

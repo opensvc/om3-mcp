@@ -24,7 +24,8 @@ func (c *previewClient) GetJSON(_ context.Context, path string, query url.Values
 	items := []daemonObjectConfigItem{}
 	for _, item := range c.items {
 		item.Object = c.object
-		if len(query["kw"]) == 0 || slices.Contains(query["kw"], item.Keyword) {
+		// The daemon names a key of DEFAULT without its section.
+		if len(query["kw"]) == 0 || slices.ContainsFunc(query["kw"], func(kw string) bool { return configKeyName(kw) == item.Keyword }) {
 			items = append(items, item)
 		}
 	}
@@ -176,6 +177,126 @@ func TestPreviewObjectConfigUpdate(t *testing.T) {
 	}
 }
 
+func TestConfigKeyNameIsTheNameOfTheDaemon(t *testing.T) {
+	for key, want := range map[string]string{
+		"DEFAULT.orchestrate":       "orchestrate",
+		"orchestrate":               "orchestrate",
+		"DEFAULT.nodes@n1.acme.com": "nodes@n1.acme.com",
+		"env.x":                     "env.x",
+		"fs#1.mnt@n1":               "fs#1.mnt@n1",
+		// om3 splits at the last dot: DEFAULT.a is the section.
+		"DEFAULT.a.b": "DEFAULT.a.b",
+		// om3 tells DEFAULT by its case.
+		"default.orchestrate": "default.orchestrate",
+	} {
+		if got := configKeyName(key); got != want {
+			t.Errorf("configKeyName(%q) = %q, want %q", key, got, want)
+		}
+	}
+}
+
+// A key of DEFAULT named with its section, as models name it, is read back
+// without it: its current value is the one the daemon gives.
+func TestPreviewReadsAKeyOfDEFAULTNamedWithItsSection(t *testing.T) {
+	client := &previewClient{object: "test/svc/web", items: []daemonObjectConfigItem{
+		{Keyword: "orchestrate", Value: "no"},
+		{Keyword: "nodes@n1", Value: "n1"},
+		{Keyword: "env.x", Value: "1"},
+	}}
+	preview, err := New(client).PreviewObjectConfigUpdate(t.Context(), UpdateObjectConfigOptions{
+		Path:  "test/svc/web",
+		Set:   []string{"DEFAULT.orchestrate=ha", "orchestrate+=start", "DEFAULT.nodes@n1=n2"},
+		Unset: []string{"DEFAULT.env.x"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The two names of orchestrate are read once.
+	if len(client.reads) != 1 || len(client.reads[0]["kw"]) != 3 {
+		t.Fatalf("reads = %v", client.reads)
+	}
+	if set := changeOf(t, preview, "DEFAULT.orchestrate"); value(set.Before) != "no" || set.Note != "" || value(set.After) != "ha" {
+		t.Fatalf("DEFAULT.orchestrate = %+v", set)
+	}
+	// The second operation on the key starts from the first, whatever its name.
+	if appended := changeOf(t, preview, "orchestrate"); value(appended.Before) != "ha" || value(appended.After) != "ha start" {
+		t.Fatalf("orchestrate = %+v", appended)
+	}
+	if scoped := changeOf(t, preview, "DEFAULT.nodes@n1"); scoped.Scope != "n1" || value(scoped.Before) != "n1" || value(scoped.After) != "n2" {
+		t.Fatalf("DEFAULT.nodes@n1 = %+v", scoped)
+	}
+	// DEFAULT.env.x is the key x of a section DEFAULT.env, not env.x: not set.
+	if unset := changeOf(t, preview, "DEFAULT.env.x"); unset.Note != notSetNote.text {
+		t.Fatalf("DEFAULT.env.x = %+v", unset)
+	}
+}
+
+// The two names of a key of DEFAULT share its value in every order and on
+// every path: a set then a set, an unset then a set, a value not computed.
+func TestPreviewSharesTheValueOfTheTwoNamesOfAKey(t *testing.T) {
+	items := []daemonObjectConfigItem{{Keyword: "orchestrate", Value: "no"}, {Keyword: "env", Value: "PRD"}}
+	run := func(set, unset []string) Preview {
+		t.Helper()
+		preview, err := New(&previewClient{object: "test/svc/web", items: items}).PreviewObjectConfigUpdate(t.Context(), UpdateObjectConfigOptions{Path: "test/svc/web", Set: set, Unset: unset})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return preview
+	}
+	preview := run([]string{"orchestrate=ha", "DEFAULT.orchestrate+=start"}, nil)
+	if appended := changeOf(t, preview, "DEFAULT.orchestrate"); value(appended.Before) != "ha" || value(appended.After) != "ha start" {
+		t.Fatalf("set then set = %+v", appended)
+	}
+	preview = run([]string{"orchestrate+=x"}, []string{"DEFAULT.orchestrate"})
+	if set := changeOf(t, preview, "orchestrate"); value(set.Before) != "" || value(set.After) != "x" {
+		t.Fatalf("unset then set = %+v", set)
+	}
+	preview = run([]string{"DEFAULT.orchestrate[5]=x", "orchestrate+=y"}, nil)
+	if after := changeOf(t, preview, "orchestrate"); !slices.Contains(after.NoteKeys, afterUncomputedNote.key) || after.After != nil {
+		t.Fatalf("after a value not computed = %+v", after)
+	}
+}
+
+// A section is told as om3 tells it: a key without a dot is of DEFAULT, never
+// of a section deleted, and a section may hold dots.
+func TestPreviewTellsTheSectionOfAKeyAsOm3(t *testing.T) {
+	client := &previewClient{object: "test/svc/web", items: []daemonObjectConfigItem{
+		{Keyword: "env", Value: "PRD"},
+		{Keyword: "env.x", Value: "1"},
+		{Keyword: "array#baie.acme.com.api", Value: "https://baie"},
+	}}
+	preview, err := New(client).PreviewObjectConfigUpdate(t.Context(), UpdateObjectConfigOptions{
+		Path:   "test/svc/web",
+		Set:    []string{"env=TST", "array#baie.acme.com.api=https://new"},
+		Delete: []string{"env", "array#baie.acme.com"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env := changeOf(t, preview, "env"); value(env.Before) != "PRD" || env.Note != "" {
+		t.Fatalf("env of DEFAULT = %+v", env)
+	}
+	if api := changeOf(t, preview, "array#baie.acme.com.api"); !slices.Equal(api.NoteKeys, []string{"section_deleted_first"}) {
+		t.Fatalf("key of a dotted section deleted = %+v", api)
+	}
+}
+
+func TestConfigKeySplitAsOm3(t *testing.T) {
+	for key, want := range map[string][2]string{
+		"orchestrate":             {"DEFAULT", "orchestrate"},
+		"nodes@n1.acme.com":       {"DEFAULT", "nodes@n1.acme.com"},
+		"DEFAULT.nodes@n1":        {"DEFAULT", "nodes@n1"},
+		"env.x":                   {"env", "x"},
+		"data.c.d":                {"data", "c.d"},
+		"fs#1.mnt@n1.acme.com":    {"fs#1", "mnt@n1.acme.com"},
+		"array#baie.acme.com.api": {"array#baie.acme.com", "api"},
+	} {
+		if section, option := configKeySplit(key); section != want[0] || option != want[1] {
+			t.Errorf("configKeySplit(%q) = %q, %q, want %q", key, section, option, want)
+		}
+	}
+}
+
 func TestPreviewObjectConfigUpdateHidesSecrets(t *testing.T) {
 	client := &previewClient{object: "cluster", items: []daemonObjectConfigItem{
 		{Keyword: "cluster.secret", Value: "s3cret"},
@@ -253,6 +374,15 @@ func TestPreviewNodeConfigUpdate(t *testing.T) {
 	}
 	if uuid := changeOf(t, preview, "node.uuid"); uuid.Before != nil || preview.SecretsOmitted != 1 {
 		t.Fatalf("uuid = %+v", uuid)
+	}
+	// A key of DEFAULT of a node, named with its section, is read back without it.
+	client = &previewClient{items: []daemonObjectConfigItem{{Keyword: "env", Node: "n1", Value: "TST"}}}
+	preview, err = New(client).PreviewNodeConfigUpdate(t.Context(), UpdateNodeConfigOptions{Node: "n1", Set: []string{"DEFAULT.env=PRD"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env := changeOf(t, preview, "DEFAULT.env"); value(env.Before) != "TST" || env.Note != "" {
+		t.Fatalf("DEFAULT.env of a node = %+v", env)
 	}
 }
 
