@@ -13,6 +13,18 @@ const (
 	maxClusterStatusIssues        = 50
 	maxClusterStatusGenerations   = 200
 	maxClusterStatusArbitrators   = 50
+	// maxClusterStatusInstanceMonitors bounds the instances listed per
+	// object in instance_monitors, and maxClusterStatusPageInstanceMonitors
+	// those of a whole page: an orchestration of every instance at once
+	// must not fill the context of a model.
+	maxClusterStatusInstanceMonitors     = 50
+	maxClusterStatusPageInstanceMonitors = 200
+	// maxClusterStatusStateReasonRunes bounds the free text of a daemon
+	// state_reason.
+	maxClusterStatusStateReasonRunes = 500
+	// idleMonitorState is the monitor state of an instance at rest, the one
+	// instance_monitors leaves out.
+	idleMonitorState = "idle"
 )
 
 type GetClusterStatusOptions struct {
@@ -136,6 +148,9 @@ type ClusterStatusObjectPage struct {
 	StateCounts   ClusterStatusObjectStateCounts `json:"state_counts" jsonschema:"counts grouped by exact daemon-reported values across all visible actor objects"`
 	NextCursor    string                         `json:"next_cursor,omitempty" jsonschema:"the exact object path to pass as object_cursor for the next page"`
 	Truncated     bool                           `json:"truncated" jsonschema:"whether more actor object records remain after this page"`
+	// InstanceMonitorsTruncated tells that the page bound, not the one of an
+	// object, cut instance_monitors.
+	InstanceMonitorsTruncated bool `json:"instance_monitors_truncated" jsonschema:"whether the 200-entry limit of the page left instances out of the instance_monitors of its objects, in path order; each object's instance_monitors_total keeps its full count"`
 }
 
 type ClusterStatusObject struct {
@@ -152,6 +167,22 @@ type ClusterStatusObject struct {
 	UpInstancesCount int      `json:"up_instances_count" jsonschema:"the aggregate number of up instances reported by OpenSVC"`
 	Scope            []string `json:"scope" jsonschema:"the sorted node names in the object scope"`
 	UpdatedAt        string   `json:"updated_at" jsonschema:"the last object status update timestamp reported by OpenSVC"`
+	// InstanceMonitors lists the instances whose monitor is not idle, for
+	// size only: the MCP classifies no state.
+	InstanceMonitors          []ClusterStatusInstanceMonitor `json:"instance_monitors,omitempty" jsonschema:"the instances of this object whose exact monitor state is not idle, sorted by node, at most 50 per object and 200 per page; absent when no instance of the object reports a monitor other than idle"`
+	InstanceMonitorsTotal     int                            `json:"instance_monitors_total,omitempty" jsonschema:"the number of instances of this object whose exact monitor state is not idle, before the limits; absent when zero"`
+	InstanceMonitorsTruncated bool                           `json:"instance_monitors_truncated,omitempty" jsonschema:"whether instances were left out of instance_monitors by the limit of the object or of the page"`
+}
+
+type ClusterStatusInstanceMonitor struct {
+	Node           string `json:"node" jsonschema:"the node of the instance"`
+	State          string `json:"state" jsonschema:"the exact instance monitor state reported by OpenSVC, such as provision failed or starting"`
+	StateUpdatedAt string `json:"state_updated_at" jsonschema:"the monitor state update timestamp reported by OpenSVC"`
+	// StateReason is absent from the daemons older than the field, and
+	// when the state says enough.
+	StateReason          string `json:"state_reason,omitempty" jsonschema:"why the instance is in a failure state, as the daemon words it when the state alone does not say it, at most 500 characters; absent otherwise"`
+	StateReasonTruncated bool   `json:"state_reason_truncated,omitempty" jsonschema:"whether state_reason was cut after 500 characters"`
+	GlobalExpect         string `json:"global_expect" jsonschema:"the exact global target state of the instance monitor reported by OpenSVC"`
 }
 
 type ClusterStatusObjectStateCounts struct {
@@ -160,11 +191,13 @@ type ClusterStatusObjectStateCounts struct {
 	Provisioned    []ClusterStatusValueCount `json:"provisioned" jsonschema:"counts by exact provisioned value"`
 	Frozen         []ClusterStatusValueCount `json:"frozen" jsonschema:"counts by exact freeze value"`
 	PlacementState []ClusterStatusValueCount `json:"placement_state" jsonschema:"counts by exact placement state value"`
+	// InstanceMonitorState counts instances, not objects.
+	InstanceMonitorState []ClusterStatusValueCount `json:"instance_monitor_state" jsonschema:"counts of the instances of visible actor objects with a reported monitor, by exact monitor state value, idle included"`
 }
 
 type ClusterStatusValueCount struct {
 	Value string `json:"value" jsonschema:"the exact value reported by OpenSVC, including an empty string"`
-	Count int    `json:"count" jsonschema:"the number of visible actor objects reporting this exact value"`
+	Count int    `json:"count" jsonschema:"the number of entries reporting this exact value: visible actor objects, or instances for instance_monitor_state"`
 }
 
 func (s *Service) GetClusterStatus(ctx context.Context, options GetClusterStatusOptions) (ClusterStatusSnapshot, error) {
@@ -307,13 +340,25 @@ func clusterStatusObjects(status clusterStatusResponse, cursor string, limit int
 	provisioned := make(map[string]int)
 	frozen := make(map[string]int)
 	placement := make(map[string]int)
+	monitorStates := make(map[string]int)
+	monitors := clusterStatusInstanceMonitors(status)
 	for path, object := range status.Cluster.Object {
 		if object.Availability == nil {
 			continue
 		}
 		scope := append([]string{}, object.Scope...)
 		sort.Strings(scope)
-		items = append(items, ClusterStatusObject{Path: path, Availability: *object.Availability, Overall: object.Overall, Provisioned: object.Provisioned, Frozen: object.Frozen, PlacementState: object.PlacementState, PlacementPolicy: object.PlacementPolicy, Orchestrate: object.Orchestrate, Topology: object.Topology, Priority: object.Priority, UpInstancesCount: object.UpInstancesCount, Scope: scope, UpdatedAt: object.UpdatedAt})
+		item := ClusterStatusObject{Path: path, Availability: *object.Availability, Overall: object.Overall, Provisioned: object.Provisioned, Frozen: object.Frozen, PlacementState: object.PlacementState, PlacementPolicy: object.PlacementPolicy, Orchestrate: object.Orchestrate, Topology: object.Topology, Priority: object.Priority, UpInstancesCount: object.UpInstancesCount, Scope: scope, UpdatedAt: object.UpdatedAt}
+		var notIdle []ClusterStatusInstanceMonitor
+		for _, monitor := range monitors[path] {
+			monitorStates[monitor.State]++
+			if monitor.State != idleMonitorState {
+				notIdle = append(notIdle, monitor)
+			}
+		}
+		item.InstanceMonitors = notIdle
+		item.InstanceMonitorsTotal = len(notIdle)
+		items = append(items, item)
 		availability[*object.Availability]++
 		overall[object.Overall]++
 		provisioned[object.Provisioned]++
@@ -324,15 +369,62 @@ func clusterStatusObjects(status clusterStatusResponse, cursor string, limit int
 	start := sort.Search(len(items), func(i int) bool { return items[i].Path > cursor })
 	end := min(start+limit, len(items))
 	pageItems := append([]ClusterStatusObject{}, items[start:end]...)
+	pageMonitorsTruncated := boundPageInstanceMonitors(pageItems)
 	page := ClusterStatusObjectPage{
 		ReportedTotal: len(status.Cluster.Object), ActorTotal: len(items), Count: len(pageItems), Items: pageItems,
-		StateCounts: ClusterStatusObjectStateCounts{Availability: exactValueCounts(availability), Overall: exactValueCounts(overall), Provisioned: exactValueCounts(provisioned), Frozen: exactValueCounts(frozen), PlacementState: exactValueCounts(placement)},
-		Truncated:   end < len(items),
+		StateCounts: ClusterStatusObjectStateCounts{Availability: exactValueCounts(availability), Overall: exactValueCounts(overall), Provisioned: exactValueCounts(provisioned), Frozen: exactValueCounts(frozen), PlacementState: exactValueCounts(placement), InstanceMonitorState: exactValueCounts(monitorStates)},
+		Truncated:   end < len(items), InstanceMonitorsTruncated: pageMonitorsTruncated,
 	}
 	if page.Truncated {
 		page.NextCursor = pageItems[len(pageItems)-1].Path
 	}
 	return page
+}
+
+// boundPageInstanceMonitors applies the bounds of instance_monitors to the
+// objects of a page, in their order, and tells whether the page bound cut
+// any.
+func boundPageInstanceMonitors(items []ClusterStatusObject) bool {
+	left := maxClusterStatusPageInstanceMonitors
+	pageTruncated := false
+	for i := range items {
+		monitors := items[i].InstanceMonitors
+		end := min(len(monitors), maxClusterStatusInstanceMonitors)
+		if end > left {
+			end = left
+			pageTruncated = true
+		}
+		left -= end
+		if end == 0 {
+			// Absent from the JSON, not an empty list.
+			monitors = nil
+		}
+		items[i].InstanceMonitors = monitors[:end]
+		items[i].InstanceMonitorsTruncated = end < items[i].InstanceMonitorsTotal
+	}
+	return pageTruncated
+}
+
+// clusterStatusInstanceMonitors gathers, by object path, the instances the
+// nodes report with a monitor, sorted by node.
+func clusterStatusInstanceMonitors(status clusterStatusResponse) map[string][]ClusterStatusInstanceMonitor {
+	result := make(map[string][]ClusterStatusInstanceMonitor)
+	for nodeName, node := range status.Cluster.Node {
+		for path, instance := range node.Instance {
+			if instance.Monitor == nil {
+				continue
+			}
+			reason, reasonTruncated := boundedRunes(instance.Monitor.StateReason, maxClusterStatusStateReasonRunes)
+			result[path] = append(result[path], ClusterStatusInstanceMonitor{
+				Node: nodeName, State: instance.Monitor.State, StateUpdatedAt: instance.Monitor.StateUpdatedAt,
+				StateReason: reason, StateReasonTruncated: reasonTruncated, GlobalExpect: instance.Monitor.GlobalExpect,
+			})
+		}
+	}
+	for _, monitors := range result {
+		sort.Slice(monitors, func(i, j int) bool { return monitors[i].Node < monitors[j].Node })
+	}
+	return result
 }
 
 func exactValueCounts(values map[string]int) []ClusterStatusValueCount {

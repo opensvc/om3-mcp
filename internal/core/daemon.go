@@ -340,6 +340,16 @@ type clusterStatusResponse struct {
 				UpdatedAt             string `json:"updated_at"`
 			} `json:"monitor"`
 			Daemon clusterNodeDaemon `json:"daemon"`
+			// Instance holds the instances of the node by object path; only
+			// their monitor is read.
+			Instance map[string]struct {
+				Monitor *struct {
+					State          string `json:"state"`
+					StateUpdatedAt string `json:"state_updated_at"`
+					StateReason    string `json:"state_reason"`
+					GlobalExpect   string `json:"global_expect"`
+				} `json:"monitor"`
+			} `json:"instance"`
 		} `json:"node"`
 		Object map[string]struct {
 			Availability     *string  `json:"avail"`

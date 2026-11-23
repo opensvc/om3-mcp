@@ -26,6 +26,7 @@ func TestGetClusterStatusPreservesFactsAndExactValues(t *testing.T) {
 						"global_expect_updated_at":"0001-01-01T00:00:00Z","local_expect":"custom-expect",
 						"local_expect_updated_at":"2026-09-23T09:12:43Z","orchestration_id":"orch-1",
 						"orchestration_is_done":false,"session_id":"session-1","updated_at":"2026-09-23T09:12:44Z"},
+					"instance":{"prod/svc/api":{"monitor":{"state":"idle"}},"prod/svc/db":{"monitor":{"state":"starting","global_expect":"started"}}},
 					"daemon":{"pid":42,"started_at":"2026-09-23T09:12:40Z","heartbeat":{
 						"updated_at":"2026-09-23T09:15:00Z","last_message":{"from":"node-a","patch_length":3,"type":"patch"},
 						"last_messages":[{"from":"node-b","patch_length":4,"type":"full"}],"secret_version":{"main":5,"alt":4},
@@ -33,7 +34,12 @@ func TestGetClusterStatusPreservesFactsAndExactValues(t *testing.T) {
 							"alerts":[{"severity":"notice","message":"raw alert"}],"peers":{"node-b":{"desc":"from node-b","is_beating":false,"changed_at":"x","last_beating_at":"y"}}}]
 					}}
 				},
-				"node-c": {"status":{"agent":"v3-other"},"monitor":{"state":"idle"},"daemon":{"pid":43}}
+				"node-c": {"status":{"agent":"v3-other"},"monitor":{"state":"idle"},"daemon":{"pid":43},"instance":{
+					"prod/svc/api":{"monitor":{"state":"provision failed","state_updated_at":"2026-09-23T09:13:00Z","global_expect":"none","state_reason":"raw reason"}},
+					"prod/svc/db":{"monitor":{"state":"idle"}},
+					"prod/cfg/app":{"monitor":{"state":"custom-cfg-state"}},
+					"prod/svc/gone":{"config":{}}
+				}}
 			},
 			"object": {
 				"cluster":{"scope":["node-a","node-b"]},
@@ -83,6 +89,15 @@ func TestGetClusterStatusPreservesFactsAndExactValues(t *testing.T) {
 	if !hasExactValueCount(result.Objects.StateCounts.Availability, "UP-CUSTOM", 1) || !hasExactValueCount(result.Objects.StateCounts.PlacementState, "elsewhere", 1) {
 		t.Errorf("exact state counts = %+v", result.Objects.StateCounts)
 	}
+	if len(object.InstanceMonitors) != 1 || object.InstanceMonitors[0] != (ClusterStatusInstanceMonitor{Node: "node-c", State: "provision failed", StateUpdatedAt: "2026-09-23T09:13:00Z", StateReason: "raw reason", GlobalExpect: "none"}) || object.InstanceMonitorsTotal != 1 || object.InstanceMonitorsTruncated || result.Objects.InstanceMonitorsTruncated {
+		t.Errorf("instance monitors not idle = %+v (total %d, truncated %v, page truncated %v)", object.InstanceMonitors, object.InstanceMonitorsTotal, object.InstanceMonitorsTruncated, result.Objects.InstanceMonitorsTruncated)
+	}
+	// Instances of actor objects only, idle included; a non-actor or an
+	// instance without monitor is not counted.
+	counts := result.Objects.StateCounts.InstanceMonitorState
+	if len(counts) != 3 || !hasExactValueCount(counts, "idle", 2) || !hasExactValueCount(counts, "provision failed", 1) || !hasExactValueCount(counts, "starting", 1) {
+		t.Errorf("instance monitor state counts = %+v", counts)
+	}
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		t.Fatalf("marshal cluster status: %v", err)
@@ -105,6 +120,11 @@ func TestGetClusterStatusPreservesFactsAndExactValues(t *testing.T) {
 	}
 	if next.Objects.Count != 1 || next.Objects.Items[0].Path != "prod/svc/db" || next.Objects.Truncated {
 		t.Errorf("next object page = %+v", next.Objects)
+	}
+	if monitors := next.Objects.Items[0].InstanceMonitors; len(monitors) != 1 || monitors[0].Node != "node-a" || monitors[0].State != "starting" || monitors[0].GlobalExpect != "started" {
+		t.Errorf("next object instance monitors = %+v", monitors)
+	} else if encoded, err := json.Marshal(monitors[0]); err != nil || strings.Contains(string(encoded), "state_reason") {
+		t.Errorf("monitor without a reason carries state_reason: %s", encoded)
 	}
 }
 
@@ -163,4 +183,105 @@ func hasExactValueCount(values []ClusterStatusValueCount, value string, count in
 		}
 	}
 	return false
+}
+
+func TestClusterStatusOmitsIdleInstanceMonitors(t *testing.T) {
+	service := New(&fakeJSONGetter{t: t, payload: `{"cluster": {
+		"node": {"node-a": {"instance": {"prod/svc/idle": {"monitor": {"state": "idle"}}, "prod/svc/none": {"config": {}}}}},
+		"object": {"prod/svc/idle": {"avail": "up"}, "prod/svc/none": {"avail": "up"}}
+	}}`})
+	result, err := service.GetClusterStatus(context.Background(), GetClusterStatusOptions{})
+	if err != nil {
+		t.Fatalf("get cluster status: %v", err)
+	}
+	encoded, err := json.Marshal(result.Objects.Items)
+	if err != nil {
+		t.Fatalf("marshal objects: %v", err)
+	}
+	for _, key := range []string{`"instance_monitors"`, `"instance_monitors_total"`, `"instance_monitors_truncated"`} {
+		if strings.Contains(string(encoded), key) {
+			t.Errorf("objects without a monitor other than idle carry %s: %s", key, encoded)
+		}
+	}
+	if counts := result.Objects.StateCounts.InstanceMonitorState; len(counts) != 1 || !hasExactValueCount(counts, "idle", 1) {
+		t.Errorf("instance monitor state counts = %+v", counts)
+	}
+}
+
+func TestClusterStatusInstanceMonitorsAreBounded(t *testing.T) {
+	nodes := make(map[string]any, maxClusterStatusInstanceMonitors+1)
+	for i := 0; i <= maxClusterStatusInstanceMonitors; i++ {
+		nodes[fmt.Sprintf("node-%03d", i)] = map[string]any{"instance": map[string]any{
+			"prod/svc/api": map[string]any{"monitor": map[string]any{"state": "start failed", "state_reason": strings.Repeat("é", maxClusterStatusStateReasonRunes+1)}},
+		}}
+	}
+	payload, err := json.Marshal(map[string]any{"cluster": map[string]any{
+		"node":   nodes,
+		"object": map[string]any{"prod/svc/api": map[string]any{"avail": "down"}},
+	}})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	service := New(&fakeJSONGetter{t: t, payload: string(payload)})
+	result, err := service.GetClusterStatus(context.Background(), GetClusterStatusOptions{})
+	if err != nil {
+		t.Fatalf("get cluster status: %v", err)
+	}
+	object := result.Objects.Items[0]
+	if len(object.InstanceMonitors) != maxClusterStatusInstanceMonitors || object.InstanceMonitorsTotal != maxClusterStatusInstanceMonitors+1 || !object.InstanceMonitorsTruncated || object.InstanceMonitors[0].Node != "node-000" || result.Objects.InstanceMonitorsTruncated {
+		t.Errorf("instance monitors bounds: count %d, total %d, truncated %v, first %q, page truncated %v", len(object.InstanceMonitors), object.InstanceMonitorsTotal, object.InstanceMonitorsTruncated, object.InstanceMonitors[0].Node, result.Objects.InstanceMonitorsTruncated)
+	}
+	if first := object.InstanceMonitors[0]; !first.StateReasonTruncated || len([]rune(first.StateReason)) != maxClusterStatusStateReasonRunes {
+		t.Errorf("state reason bound: %d runes, truncated %v", len([]rune(first.StateReason)), first.StateReasonTruncated)
+	}
+	if !hasExactValueCount(result.Objects.StateCounts.InstanceMonitorState, "start failed", maxClusterStatusInstanceMonitors+1) {
+		t.Errorf("instance monitor state counts = %+v", result.Objects.StateCounts.InstanceMonitorState)
+	}
+}
+
+func TestClusterStatusInstanceMonitorsAreBoundedPerPage(t *testing.T) {
+	// Five objects of 50 instances in failure: 250 entries for a page of 200.
+	const objects = 5
+	nodes := make(map[string]any, maxClusterStatusInstanceMonitors)
+	actors := make(map[string]any, objects)
+	for o := 0; o < objects; o++ {
+		actors[fmt.Sprintf("prod/svc/s%d", o)] = map[string]any{"avail": "down"}
+	}
+	for i := 0; i < maxClusterStatusInstanceMonitors; i++ {
+		instances := make(map[string]any, objects)
+		for path := range actors {
+			instances[path] = map[string]any{"monitor": map[string]any{"state": "start failed"}}
+		}
+		nodes[fmt.Sprintf("node-%03d", i)] = map[string]any{"instance": instances}
+	}
+	payload, err := json.Marshal(map[string]any{"cluster": map[string]any{"node": nodes, "object": actors}})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	service := New(&fakeJSONGetter{t: t, payload: string(payload)})
+	result, err := service.GetClusterStatus(context.Background(), GetClusterStatusOptions{})
+	if err != nil {
+		t.Fatalf("get cluster status: %v", err)
+	}
+	if !result.Objects.InstanceMonitorsTruncated {
+		t.Errorf("page bound not reported")
+	}
+	listed := 0
+	for i, object := range result.Objects.Items {
+		listed += len(object.InstanceMonitors)
+		full := i < maxClusterStatusPageInstanceMonitors/maxClusterStatusInstanceMonitors
+		if object.InstanceMonitorsTotal != maxClusterStatusInstanceMonitors || object.InstanceMonitorsTruncated == full || (len(object.InstanceMonitors) == maxClusterStatusInstanceMonitors) != full {
+			t.Errorf("object %s: count %d, total %d, truncated %v", object.Path, len(object.InstanceMonitors), object.InstanceMonitorsTotal, object.InstanceMonitorsTruncated)
+		}
+	}
+	if listed != maxClusterStatusPageInstanceMonitors {
+		t.Errorf("page lists %d instance monitors, want %d", listed, maxClusterStatusPageInstanceMonitors)
+	}
+	encoded, err := json.Marshal(result.Objects.Items[objects-1])
+	if err != nil {
+		t.Fatalf("marshal object: %v", err)
+	}
+	if strings.Contains(string(encoded), `"instance_monitors":`) || !strings.Contains(string(encoded), `"instance_monitors_total":50`) {
+		t.Errorf("object cut by the page bound = %s", encoded)
+	}
 }
