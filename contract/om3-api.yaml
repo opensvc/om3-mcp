@@ -825,6 +825,32 @@ paths:
       tags:
         - cluster
 
+  /api/cluster/tombstone:
+    get:
+      description: |
+        Return the tombstones of the deletes and purges, a record per node
+        deleting its instance, with the nodes still publishing the version of
+        the config deleted. A user other than root sees the ones of the
+        namespaces it is guest of.
+      operationId: GetClusterTombstones
+      tags:
+        - cluster
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TombstoneList'
+        401:
+          $ref: '#/components/responses/401'
+        403:
+          $ref: '#/components/responses/403'
+        500:
+          $ref: '#/components/responses/500'
   /api/cluster/lock:
     get:
       description: |
@@ -1106,6 +1132,8 @@ paths:
           $ref: '#/components/responses/403'
         500:
           $ref: '#/components/responses/500'
+        503:
+          $ref: '#/components/responses/503'
 
   /api/instance/path/{namespace}/{kind}/{name}/progress:
     post:
@@ -1200,6 +1228,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NetworkList'
+        401:
+          $ref: '#/components/responses/401'
+        403:
+          $ref: '#/components/responses/403'
+        500:
+          $ref: '#/components/responses/500'
+
+  /api/network/node:
+    get:
+      operationId: GetNetworkNodes
+      description: |
+        What the last setup of each network made on each node: the device
+        it set up, the part of the network the node hands out, how the node
+        reaches each other node of the network, by a route or a tunnel, and
+        what failed. Each node records it for itself and publishes it in the
+        cluster data. The root and inspector grants read it: it is left out
+        of the cluster status and of the events for the others.
+      tags:
+        - network
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: name
+          description: the name of a cluster network
+          required: false
+          schema:
+            type: string
+        - $ref: '#/components/parameters/inQueryNodeSelector'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkNodeList'
         401:
           $ref: '#/components/responses/401'
         403:
@@ -6436,6 +6501,8 @@ paths:
           $ref: '#/components/responses/403'
         500:
           $ref: '#/components/responses/500'
+        503:
+          $ref: '#/components/responses/503'
 
   /api/object/path:
     get:
@@ -6462,6 +6529,8 @@ paths:
           $ref: '#/components/responses/403'
         500:
           $ref: '#/components/responses/500'
+        503:
+          $ref: '#/components/responses/503'
 
   /api/object/path/{namespace}/svc/{name}/disable:
     post:
@@ -6551,6 +6620,8 @@ paths:
           $ref: '#/components/responses/403'
         500:
           $ref: '#/components/responses/500'
+        503:
+          $ref: '#/components/responses/503'
 
   /api/object/path/{namespace}/{kind}/{name}/action/abort:
     post:
@@ -6660,6 +6731,7 @@ paths:
         - $ref: '#/components/parameters/inPathNamespace'
         - $ref: '#/components/parameters/inPathKind'
         - $ref: '#/components/parameters/inPathName'
+        - $ref: '#/components/parameters/inQueryForce'
       responses:
         200:
           description: OK
@@ -6814,6 +6886,7 @@ paths:
         - $ref: '#/components/parameters/inPathNamespace'
         - $ref: '#/components/parameters/inPathKind'
         - $ref: '#/components/parameters/inPathName'
+        - $ref: '#/components/parameters/inQueryForce'
       responses:
         200:
           description: OK
@@ -7082,6 +7155,7 @@ paths:
         - $ref: '#/components/parameters/inPathNamespace'
         - $ref: '#/components/parameters/inPathKind'
         - $ref: '#/components/parameters/inPathName'
+        - $ref: '#/components/parameters/inQueryForce'
       responses:
         200:
           description: OK
@@ -8492,6 +8566,8 @@ paths:
           $ref: '#/components/responses/403'
         500:
           $ref: '#/components/responses/500'
+        503:
+          $ref: '#/components/responses/503'
 
   /api/store:
     get:
@@ -9364,6 +9440,64 @@ components:
           items:
             $ref: '#/components/schemas/ClusterLock'
 
+    Tombstone:
+      type: object
+      required:
+        - orchestration_id
+        - node
+        - path
+        - kind
+        - version
+        - deleted_at
+        - holders
+      properties:
+        orchestration_id:
+          description: the orchestration of the delete or the purge
+          type: string
+          x-go-name: OrchestrationID
+        node:
+          description: the node that deleted its instance and wrote the tombstone
+          type: string
+        path:
+          type: string
+        kind:
+          type: string
+          enum:
+            - purged
+            - deleted
+        object_id:
+          description: the id of the object deleted
+          type: string
+          x-go-name: ObjectID
+        version:
+          description: the modification time of the config deleted; a config of that version or older is the deleted one
+          type: string
+          format: date-time
+        deleted_at:
+          description: when the orchestration was accepted, as the node accepting it stamped it
+          type: string
+          format: date-time
+        holders:
+          description: the nodes publishing a config the tombstone kills, the deleted version
+          type: array
+          items:
+            type: string
+
+    TombstoneList:
+      type: object
+      required:
+        - items
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - TombstoneList
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tombstone'
+
     PostClusterLock:
       type: object
       required:
@@ -9544,6 +9678,13 @@ components:
               description: |
                 The node the collector of this node takes for the collector
                 speaker, as the speaker it waits for while away.
+            unreachable_since:
+              type: string
+              format: date-time
+              description: |
+                The time the speaker found the collector unreachable at, its
+                sends failing before any answer. Absent once it answers: the
+                scheduler holds the jobs feeding the collector meanwhile.
           required:
             - url
 
@@ -10358,32 +10499,27 @@ components:
       x-go-type-import:
         path: github.com/opensvc/om3/v3/core/instance
       type: object
+      description: |
+        The configuration of an instance, as the node publishing it
+        evaluates it. The properties of an actor, a svc or a vol, are not
+        said for a cfg, sec, usr or nscfg instance, and pool, size and
+        charges are said for a vol only.
       required:
-        - app
-        - checksum
-        - children
-        - drp
-        - env
-        - monitor_action
-        - pre_monitor_action
-        - nodename
-        - orchestrate
-        - path
-        - parents
-        - placement_policy
+        - csum
         - priority
-        - resources
-        - schedules
         - scope
-        - subsets
-        - topology
         - updated_at
-        - stonith
       properties:
         app:
           type: string
-        checksum:
-          type: string
+        charges:
+          description: |
+            the bytes the vol takes of each pool other than its own, by
+            pool name
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
         children:
           type: array
           items:
@@ -10397,34 +10533,56 @@ components:
           additionalProperties:
             type: integer
             format: int64
+        csum:
+          description: the checksum of the configuration file
+          type: string
         drp:
           type: boolean
         env:
           type: string
         flex:
           $ref: '#/components/schemas/FlexConfig'
+        hard_affinity:
+          description: the objects whose instance must be up on a node for the object to start there
+          type: array
+          items:
+            type: string
+        hard_anti_affinity:
+          description: the objects whose instance must not be up on a node for the object to start there
+          type: array
+          items:
+            type: string
+        id:
+          description: the id of the object, an object created again under the same path having another
+          type: string
+        is_disabled:
+          description: DEFAULT.disable
+          type: boolean
+        labels:
+          type: object
+          additionalProperties:
+            type: string
         monitor_action:
           type: array
           items:
             type: string
-        pre_monitor_action:
-          type: string
-        nodename:
-          type: string
         orchestrate:
           $ref: '#/components/schemas/Orchestrate'
-        path:
-          type: string
         parents:
           type: array
           items:
             type: string
-        pool:
-          type: string
         placement_policy:
           $ref: '#/components/schemas/PlacementPolicy'
+        pool:
+          type: string
+        pre_monitor_action:
+          type: string
         priority:
           type: integer
+        provision_disabled:
+          description: provision=false, the resources being the sysadmin's to make
+          type: boolean
         resources:
           type: object
           additionalProperties:
@@ -10440,15 +10598,44 @@ components:
         size:
           type: integer
           format: int64
+        soft_affinity:
+          description: the objects whose instance up on a node ranks the node first
+          type: array
+          items:
+            type: string
+        soft_anti_affinity:
+          description: the objects whose instance up on a node ranks the node last
+          type: array
+          items:
+            type: string
+        start_timeout:
+          description: how long a start may take, in nanoseconds
+          type: integer
+          format: int64
+        stonith:
+          type: boolean
         subsets:
           $ref: '#/components/schemas/SubsetsConfig'
         topology:
           $ref: '#/components/schemas/Topology'
+        unprovision_disabled:
+          description: unprovision=false, the resources being the sysadmin's to free
+          type: boolean
         updated_at:
           type: string
           format: date-time
-        stonith:
-          type: boolean
+        uses:
+          description: |
+            the cfg, sec and vol objects the resources of the object use, as
+            the node evaluates the configuration, sorted: a datastore named
+            by a pattern of its name, as ns1/sec/web-*, is the pattern
+          type: array
+          items:
+            type: string
+        wait_syncs_timeout:
+          description: how long a stop or a switch waits for the syncs running, in nanoseconds
+          type: integer
+          format: int64
 
     InstanceItem:
       type: object
@@ -10631,6 +10818,11 @@ components:
         state_reason:
           type: string
           description: why the instance is in a failure state, when the state alone does not say it
+        issues:
+          description: what keeps the instance from being orchestrated as usual, for the operator to act on
+          type: array
+          items:
+            type: string
         monitor_action_executed_at:
           type: string
           format: date-time
@@ -11337,6 +11529,128 @@ components:
       type: array
       items:
         $ref: '#/components/schemas/Network'
+
+    NetworkNode:
+      type: object
+      description: what the last setup of a network made on a node
+      required:
+        - name
+        - node
+        - type
+        - network
+        - peers
+        - applied_at
+      properties:
+        name:
+          type: string
+        node:
+          type: string
+        type:
+          type: string
+        network:
+          type: string
+          description: the address range of the network, empty for a network with no address
+        dev:
+          type: string
+          description: the device of the node the network is on, as its bridge
+        subnet:
+          type: string
+          description: the part of the network the node hands out
+        peers:
+          type: array
+          items:
+            $ref: '#/components/schemas/NetworkPeer'
+        ports:
+          type: array
+          description: the devices of the node the setup enslaved to the device of the network
+          items:
+            $ref: '#/components/schemas/NetworkPort'
+        skipped:
+          type: string
+          description: why the setup left the network alone, as a network disabled
+        error:
+          type: string
+          description: the failure of the setup
+        applied_at:
+          type: string
+          format: date-time
+
+    NetworkNodeItems:
+      type: array
+      items:
+        $ref: '#/components/schemas/NetworkNode'
+
+    NetworkNodeList:
+      type: object
+      required:
+        - items
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - NetworkNodeList
+        items:
+          $ref: '#/components/schemas/NetworkNodeItems'
+
+    NetworkPeer:
+      type: object
+      description: another node of a network, as the node reaches it
+      required:
+        - nodename
+        - local
+        - remote
+        - subnet
+        - tunnel
+      properties:
+        nodename:
+          type: string
+        local:
+          type: string
+          description: the address of the node the network reaches the peer from
+        remote:
+          type: string
+          description: the address of the peer the network reaches
+        subnet:
+          type: string
+          description: the part of the network the peer hands out
+        tunnel:
+          type: string
+          description: the tunnel device carrying the network to the peer, empty when the network is routed to it
+        tunnel_mode:
+          type: string
+          description: the mode of the tunnel, as ipip, ip6ip6 or gre, absent when the peer is reached by no tunnel
+        via:
+          type: string
+          description: how the node reaches the peer
+          enum:
+            - tunnel
+            - route
+            - vxlan
+          x-enum-varnames:
+            - NetworkPeerViaTunnel
+            - NetworkPeerViaRoute
+            - NetworkPeerViaVXLAN
+        error:
+          type: string
+          description: why the setup could not reach the peer
+
+    NetworkPort:
+      type: object
+      description: a device of the node the setup of a network enslaved, or failed to
+      required:
+        - name
+        - dev
+      properties:
+        name:
+          type: string
+          description: the port the configuration names
+        dev:
+          type: string
+          description: the device enslaved, the port or the vlan interface created on it
+        error:
+          type: string
+          description: why the setup could not enslave it
 
     NetworkList:
       type: object
@@ -12750,19 +13064,39 @@ components:
         - is_disabled
         - is_monitored
         - is_standby
-        - restart
       properties:
+        holds:
+          description: |
+            the values the resource holds on the node publishing the
+            configuration, or on every node when shared, by class code, as
+            {"mnt": ["/srv/app"], "bdev": ["/dev/sdb"]}
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
         is_disabled:
           type: boolean
         is_monitored:
+          type: boolean
+        is_shared:
+          description: what the resource holds is reachable from every cluster node, and held on every one
           type: boolean
         is_standby:
           type: boolean
         restart:
           type: integer
         restart_delay:
-          type: string
-          format: duration
+          description: the delay between two restarts, in nanoseconds
+          type: integer
+          format: int64
+        uses:
+          description: |
+            the cfg, sec and vol objects the resource uses, as the node
+            evaluates the configuration, sorted: none for a disabled resource
+          type: array
+          items:
+            type: string
 
     ResourceFile:
       type: object
@@ -13098,6 +13432,7 @@ components:
         - blacklistadmin
         - guest
         - heartbeat
+        - inspector
         - join
         - leave
         - operator
