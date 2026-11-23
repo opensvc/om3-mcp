@@ -225,16 +225,17 @@ func (u configUpdate) preview(secretData bool, read configRead) (Preview, error)
 	hidden := func(key string) bool {
 		return isSecretKeyword(key) || (secretData && isDataKeyword(key))
 	}
-	var keys []string
-	for _, operation := range u.sets {
-		if !hidden(operation.key) && !slices.Contains(keys, operation.key) {
-			keys = append(keys, operation.key)
+	var keys, names []string
+	want := func(key string) {
+		if !hidden(key) && !slices.Contains(names, configKeyName(key)) {
+			keys, names = append(keys, key), append(names, configKeyName(key))
 		}
 	}
+	for _, operation := range u.sets {
+		want(operation.key)
+	}
 	for _, key := range u.unsets {
-		if !hidden(key) && !slices.Contains(keys, key) {
-			keys = append(keys, key)
-		}
+		want(key)
 	}
 	preview := Preview{}
 	current := map[string]ObjectConfigKeyword{}
@@ -246,10 +247,12 @@ func (u configUpdate) preview(secretData bool, read configRead) (Preview, error)
 		}
 		readAt = config.Provenance.ObservedAt
 		// The daemon gives a scoped key with its scope in the keyword, for an
-		// object or a node; the node of a node read is in Node, no scope.
+		// object or a node; the node of a node read is in Node, no scope. It
+		// names a key of DEFAULT without its section: the name is taken again
+		// as a precaution only.
 		for _, item := range config.Items {
-			if _, seen := current[item.Keyword]; !seen {
-				current[item.Keyword] = item
+			if _, seen := current[configKeyName(item.Keyword)]; !seen {
+				current[configKeyName(item.Keyword)] = item
 			}
 		}
 	}
@@ -277,7 +280,8 @@ func (u configUpdate) preview(secretData bool, read configRead) (Preview, error)
 		}
 	}
 	// state is the value each key holds as the operations go, and whether
-	// it is known in full.
+	// it is known in full, by the name the daemon gives the key: two names
+	// of one key, with and without DEFAULT, share it.
 	type value struct {
 		text  string
 		known bool
@@ -285,14 +289,13 @@ func (u configUpdate) preview(secretData bool, read configRead) (Preview, error)
 	}
 	state := map[string]value{}
 	valueOf := func(key string) value {
-		if v, ok := state[key]; ok {
+		if v, ok := state[configKeyName(key)]; ok {
 			return v
 		}
-		section, _, _ := strings.Cut(key, ".")
-		if slices.Contains(u.deletes, section) {
+		if section, _ := configKeySplit(key); slices.Contains(u.deletes, section) {
 			return value{known: true, note: sectionDeletedNote}
 		}
-		item, ok := current[key]
+		item, ok := current[configKeyName(key)]
 		switch {
 		case !ok:
 			return value{known: true, note: notSetNote}
@@ -315,7 +318,7 @@ func (u configUpdate) preview(secretData bool, read configRead) (Preview, error)
 			change.Before, change.After = ptr(before.text), ptr("")
 			change.addNote(before.note)
 		}
-		state[key] = value{known: true}
+		state[configKeyName(key)] = value{known: true}
 		preview.Changes = append(preview.Changes, change)
 	}
 	for _, operation := range u.sets {
@@ -323,7 +326,7 @@ func (u configUpdate) preview(secretData bool, read configRead) (Preview, error)
 		if hidden(operation.key) {
 			change.addNote(secretNote)
 			preview.SecretsOmitted++
-			state[operation.key] = value{}
+			state[configKeyName(operation.key)] = value{}
 			preview.Changes = append(preview.Changes, change)
 			continue
 		}
@@ -335,14 +338,44 @@ func (u configUpdate) preview(secretData bool, read configRead) (Preview, error)
 		change.addNote(note)
 		if computed {
 			change.After, change.AfterComputedByMCP = ptr(after), true
-			state[operation.key] = value{text: after, known: true}
+			state[configKeyName(operation.key)] = value{text: after, known: true}
 		} else {
-			state[operation.key] = value{note: afterUncomputedNote}
+			state[configKeyName(operation.key)] = value{note: afterUncomputedNote}
 		}
 		preview.Changes = append(preview.Changes, change)
 	}
 	preview.ReadAt = readAt
 	return preview, nil
+}
+
+// configKeySplit splits a key as om3 does: the section of env, data and
+// labels is the part before the first dot, of the others the part before the
+// last dot ahead of the scope, and a key without a dot is of DEFAULT. The
+// option keeps the scope.
+func configKeySplit(key string) (section, option string) {
+	if first, rest, ok := strings.Cut(key, "."); ok && slices.Contains([]string{"env", "data", "labels"}, first) {
+		return first, rest
+	}
+	prefix, scope, scoped := strings.Cut(key, "@")
+	dot := strings.LastIndex(prefix, ".")
+	if dot < 0 {
+		return "DEFAULT", key
+	}
+	section, option = prefix[:dot], prefix[dot+1:]
+	if scoped {
+		option += "@" + scope
+	}
+	return section, option
+}
+
+// configKeyName gives a key as the daemon names it: om3 leaves the DEFAULT
+// section out of the name of its keys, so DEFAULT.orchestrate is read back
+// as orchestrate. The section is told by its exact case, as om3 tells it.
+func configKeyName(key string) string {
+	if section, option := configKeySplit(key); section == "DEFAULT" {
+		return option
+	}
+	return key
 }
 
 // applyConfigOperation computes the value a key takes, from its raw value,
