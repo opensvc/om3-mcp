@@ -414,3 +414,22 @@ func TestGetInstanceStatusRejectsJSONComplexityAndOutputBudget(t *testing.T) {
 		})
 	}
 }
+
+// A monitor state of failure points to the logs of the instance, where its
+// cause is; another state carries no note.
+func TestGetInstanceStatusPointsAFailedStateToTheLogs(t *testing.T) {
+	for _, test := range []struct {
+		state string
+		note  bool
+	}{{"start failed", true}, {"provision failed", true}, {"future-state", false}, {"idle", false}} {
+		payload := strings.Replace(instanceStatusPayload, `"future-state"`, `"`+test.state+`"`, 1)
+		client := &recordingJSONGetter{t: t, path: "/api/node/name/node-a/instance/path/prod/svc/app", query: url.Values{}, payload: payload}
+		result, err := New(client).GetInstanceStatus(context.Background(), GetInstanceStatusOptions{Path: "prod/svc/app", Node: "node-a"})
+		if err != nil {
+			t.Fatalf("%s: %v", test.state, err)
+		}
+		if (result.FailureNote != "") != test.note || (test.note && !strings.Contains(result.FailureNote, "get_instance_logs")) {
+			t.Errorf("state %q: got note %q, want one %v", test.state, result.FailureNote, test.note)
+		}
+	}
+}

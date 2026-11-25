@@ -35,7 +35,13 @@ type InstanceStatusSnapshot struct {
 	Status      *InstanceStatusDetail  `json:"status" jsonschema:"cached instance and resource status, or null when not published"`
 	Truncated   bool                   `json:"truncated" jsonschema:"whether nested collections or text were shortened"`
 	Truncations []InstanceTruncation   `json:"truncations" jsonschema:"reductions sorted by JSON Pointer and kind; empty when nothing was shortened"`
+	FailureNote string                 `json:"failure_note,omitempty" jsonschema:"set when the monitor state is a failure, such as start failed: where its cause is"`
 }
+
+// failedStateNote tells where the cause of a failed monitor state is: the
+// status keeps the state, not the error of the resource that failed, which
+// the logs of the instance hold.
+const failedStateNote = "the monitor state %q keeps no error message: the cause, such as a command not found, a device missing or an image not pulled, is in the logs of this instance, get_instance_logs with this path and node"
 
 type InstanceTruncation struct {
 	Path          string `json:"path" jsonschema:"JSON Pointer to the shortened field"`
@@ -278,6 +284,9 @@ func (s *Service) GetInstanceStatus(ctx context.Context, options GetInstanceStat
 		return left.Kind < right.Kind
 	})
 	result.Truncations = projection.truncations
+	if result.Monitor != nil && strings.HasSuffix(strings.TrimSpace(result.Monitor.State), "failed") {
+		result.FailureNote = fmt.Sprintf(failedStateNote, result.Monitor.State)
+	}
 	result.Provenance = s.newProvenance()
 	encoded, err = json.Marshal(result)
 	if err != nil {
