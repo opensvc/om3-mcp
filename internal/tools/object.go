@@ -8,7 +8,7 @@ import (
 )
 
 type ListClusterObjectsInput struct {
-	Selector string `json:"selector,omitempty" jsonschema:"optional OpenSVC object selector; defaults to **; examples: prod/**, */svc/*, prod/svc/redis"`
+	Selector string `json:"selector,omitempty" jsonschema:"optional OpenSVC object selector; defaults to **. A path pattern, such as prod/**, */svc/* or prod/svc/redis, or a configuration term, keyword=value or keyword!=value, with a keyword of the DEFAULT section, such as app or env, or section.keyword, such as fs.type for every fs section: only a keyword set in the configuration matches, never a default; the value is compared as written, exact and case-sensitive for a text keyword, without wildcard and with no space around the =, a list whole. + joins the terms that must all match: prod/svc/*+app=web+env=DEV; a comma separates alternatives, each a whole group that repeats its path pattern: prod/svc/*+app=web,prod/svc/*+app=api. A term reads only the configurations the answering node holds: an object whose nodes do not include it is missing, and an empty result does not prove that none exists."`
 	Limit    int    `json:"limit,omitempty" jsonschema:"optional page size between 1 and 200; defaults to 100"`
 	Cursor   string `json:"cursor,omitempty" jsonschema:"optional next_cursor returned by a previous call with the same selector"`
 }
@@ -77,7 +77,7 @@ func RegisterObjectTools(registrar *Registrar, service *core.Service) error {
 		&mcp.Tool{
 			Name:        "get_object_config",
 			Title:       "Get object configuration",
-			Description: "Read bounded raw, non-evaluated configuration keywords for one exact OpenSVC object. The cluster configuration is the object cluster, path cluster: cluster.secret is never returned. Values may contain sensitive operational data; request exact keywords when possible. The data keys of a sec or usr object, data.*, are never returned: data_keys_omitted counts them, and list_object_data_keys gives their names; those of a cfg are. The secrets cluster.secret and node.uuid are never returned either: secrets_omitted counts them, set but not returned. This tool never dereferences references, impersonates a node, or returns the raw configuration file.",
+			Description: "Read bounded raw, non-evaluated configuration keywords for one exact OpenSVC object. The cluster configuration is the object cluster, path cluster: cluster.secret is never returned. Values may contain sensitive operational data; request exact keywords when possible. The data keys of a sec or usr object, data.*, are never returned: data_keys_omitted counts them, and list_object_data_keys gives their names; those of a cfg are. The secrets cluster.secret, node.uuid and store.ssh_private_key are never returned either: secrets_omitted counts them, set but not returned. This tool never dereferences references, impersonates a node, or returns the raw configuration file.",
 			Annotations: readOnlyClosedWorldAnnotations(),
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input GetObjectConfigInput) (*mcp.CallToolResult, GetObjectConfigOutput, error) {
@@ -122,6 +122,7 @@ func RegisterObjectTools(registrar *Registrar, service *core.Service) error {
 			Title: "List cluster objects",
 			Description: "Discover OpenSVC object paths visible to the authenticated OpenSVC user using a native selector and bounded cursor pagination. " +
 				"Use returned paths as identifiers for object-specific tools; no status or configuration is returned. " +
+				"To select or count objects by their configuration, such as the services of an app or an env, give a configuration term as the selector rather than one get_object_config per object; an object whose nodes do not include the answering node is missing from the answer, which term_note recalls. " +
 				"For the state of many objects at once, such as the stopped services, read get_cluster_status, which lists the state of the visible actor objects, rather than one get_object_status per object.",
 			Annotations: readOnlyClosedWorldAnnotations(),
 		},

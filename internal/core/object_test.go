@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -146,5 +147,83 @@ func TestListClusterObjectsReadsTheItemsOfAList(t *testing.T) {
 	}
 	if want := []string{"example/svc/api", "example/svc/cache"}; !reflect.DeepEqual(paths, want) {
 		t.Errorf("got paths %v, want %v", paths, want)
+	}
+}
+
+// A selector of configuration terms goes to the daemon unchanged.
+func TestListClusterObjectsPassesConfigurationTerms(t *testing.T) {
+	selector := "prod/svc/*+app=web+env!=PRD,prod/svc/*+fs.type=flag+DEFAULT.orchestrate:"
+	client := &objectJSONGetter{t: t, selector: selector, payload: `["prod/svc/web"]`}
+	result, err := New(client).ListClusterObjects(context.Background(), ListClusterObjectsOptions{Selector: selector})
+	if err != nil {
+		t.Fatalf("list cluster objects: %v", err)
+	}
+	if client.calls != 1 || result.Total != 1 {
+		t.Fatalf("got %d calls and total %d, want 1 and 1", client.calls, result.Total)
+	}
+}
+
+// A term the daemon would answer with a value the MCP never returns, or
+// evaluate wrong, is refused before the daemon is called, for its reason.
+func TestListClusterObjectsRefusesTermsDisclosingValues(t *testing.T) {
+	for _, test := range []struct{ selector, reason string }{
+		{"cluster+cluster.secret>=m", "compares an order"},
+		{"cluster+cluster.secret=abc", "secret keyword"},
+		{"cluster+CLUSTER.SECRET@n1=abc", "secret keyword"},
+		{"**+node.uuid!=x", "secret keyword"},
+		{"*/svc/*+store#1.ssh_private_key:", "secret keyword"},
+		{"*/sec/*+data.password=x", "data key"},
+		{"*/cfg/*+data.mode=x", "data key"},
+		{"prod/svc/*+app=web,*/svc/*+fs.size<5g", "compares an order"},
+		{"*/svc/*+priority>=20", "compares an order"},
+		{"test/svc/*+!app=web", "negates a configuration term"},
+		{"*/svc/*+!data.key:", "negates a configuration term"},
+		{"prod/svc/*+app = web", "space"},
+		{"prod/svc/* +app=web", "space"},
+		{"prod/svc/*++app=web", "empty term"},
+		{"prod/svc/*+app=web,", "empty term"},
+		{"*/svc/*+env@n1.example.com=DEV", "without its section"},
+	} {
+		client := &objectJSONGetter{t: t, selector: test.selector, payload: `[]`}
+		_, err := New(client).ListClusterObjects(context.Background(), ListClusterObjectsOptions{Selector: test.selector})
+		if err == nil || !strings.Contains(err.Error(), test.reason) {
+			t.Errorf("selector %q: got error %v, want one saying %q", test.selector, err, test.reason)
+		}
+		if client.calls != 0 {
+			t.Errorf("selector %q: got %d daemon calls, want none", test.selector, client.calls)
+		}
+	}
+}
+
+// The terms om3 reads as an equality, a path pattern or a negated path
+// pattern pass, and a result of configuration terms carries its note.
+func TestListClusterObjectsAcceptsTerms(t *testing.T) {
+	for _, test := range []struct {
+		selector string
+		note     bool
+	}{
+		{"*/svc/*+env.url=http://x", true},
+		{"*/svc/*+DEFAULT.env.cmd=a>b", true},
+		{"*/svc/*+app=<none>", true},
+		{"*/svc/*+ip#1.ipname@n1=10.0.0.1", true},
+		{"*/svc/*+DEFAULT.env@n1=DEV", true},
+		{"*/svc/*+nodes=n1 n2", true},
+		{"*/svc/*+app-=x", true},
+		{"*/svc/*+app|=x", true},
+		{"*/svc/*+app^=x", true},
+		{"*/svc/*+DEFAULT.app:", true},
+		{"*/svc/*+!prod/**", false},
+		{"prod/svc/web", false},
+		{"cluster.secret[0]=x", false},
+	} {
+		client := &objectJSONGetter{t: t, selector: test.selector, payload: `[]`}
+		result, err := New(client).ListClusterObjects(context.Background(), ListClusterObjectsOptions{Selector: test.selector})
+		if err != nil {
+			t.Errorf("selector %q: got error %v, want none", test.selector, err)
+			continue
+		}
+		if (result.TermNote != "") != test.note {
+			t.Errorf("selector %q: got note %q, want one %v", test.selector, result.TermNote, test.note)
+		}
 	}
 }

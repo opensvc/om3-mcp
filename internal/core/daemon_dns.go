@@ -86,7 +86,7 @@ func (s *Service) ListDNSRecords(ctx context.Context, options ListDNSRecordsOpti
 	content = canonicalDNSContent(content)
 	var object *ClusterObjectReference
 	if options.Object != "" {
-		if strings.ContainsAny(options.Object, "*?[],\\") {
+		if hasSelectorCharacters(options.Object) {
 			return DNSRecordList{}, fmt.Errorf("object must be one exact OpenSVC object path, without wildcard or selector")
 		}
 		reference, err := validateExactObjectPath(options.Object)

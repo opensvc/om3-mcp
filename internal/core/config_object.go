@@ -41,21 +41,24 @@ type ObjectConfig struct {
 	DataKeysNote    string `json:"data_keys_note,omitempty" jsonschema:"why the data keys were left out, and where their names are"`
 	// SecretsOmitted counts the secret keywords left out, set but not
 	// returned: an empty list does not mean they are not set.
-	SecretsOmitted int `json:"secrets_omitted,omitempty" jsonschema:"the number of secret keywords left out, cluster.secret and node.uuid: they are set, their values are never returned"`
+	SecretsOmitted int `json:"secrets_omitted,omitempty" jsonschema:"the number of secret keywords left out, cluster.secret, node.uuid and store.ssh_private_key: they are set, their values are never returned"`
 }
 
 // secretKeywords are the keywords om3 declares secret, RedactSecret: the
 // daemon returns them in clear to root through the keyword reads, which
 // take no redact-secrets parameter. They are left out of every keyword read.
-var secretKeywords = []string{"cluster.secret", "node.uuid"}
+var secretKeywords = []string{"cluster.secret", "node.uuid", "store.ssh_private_key"}
 
-// isSecretKeyword says whether a keyword is a secret, whatever its case and
-// its scope: cluster.secret is scopable, and the daemon gives a value scoped
-// to a node in the keyword, cluster.secret@n1, as the redaction of a
-// configuration file compares its base option.
+// isSecretKeyword says whether a keyword is a secret, whatever its case, its
+// scope and the index of its section: cluster.secret is scopable, and the
+// daemon gives a value scoped to a node in the keyword, cluster.secret@n1, as
+// the redaction of a configuration file compares its base option; a store
+// section is indexed, store#1.ssh_private_key.
 func isSecretKeyword(keyword string) bool {
-	base, _, _ := strings.Cut(keyword, "@")
-	return slices.Contains(secretKeywords, strings.ToLower(base))
+	base, _, _ := strings.Cut(strings.ToLower(keyword), "@")
+	section, option, _ := strings.Cut(base, ".")
+	section, _, _ = strings.Cut(section, "#")
+	return slices.Contains(secretKeywords, section+"."+option)
 }
 
 // omitSecretKeywords leaves the secret keywords out of items, and counts

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -67,5 +68,20 @@ func TestGetObjectStatusRejectsMissingObject(t *testing.T) {
 	client := &recordingJSONGetter{t: t, path: "/api/object", query: url.Values{"path": {"prod/svc/missing"}}, payload: `{"items": []}`}
 	if _, err := New(client).GetObjectStatus(context.Background(), "prod/svc/missing"); err == nil {
 		t.Fatal("expected missing object error")
+	}
+}
+
+// An exact path holding characters of a selector is refused before the
+// call: the daemon would expand it, configuration terms included.
+func TestGetObjectStatusRefusesASelector(t *testing.T) {
+	for _, path := range []string{"cluster+cluster.secret>=m", "prod/sec/s+data.password=x", "prod/svc/*", "prod/svc/a,prod/svc/b", "!prod/svc/a", "prod/svc/a b"} {
+		client := &recordingJSONGetter{t: t, path: "/api/object"}
+		_, err := New(client).GetObjectStatus(context.Background(), path)
+		if err == nil || !strings.Contains(err.Error(), "characters of a selector") {
+			t.Errorf("path %q: got error %v, want a refusal of a selector", path, err)
+		}
+		if client.calls != 0 {
+			t.Errorf("path %q: got %d daemon calls, want none", path, client.calls)
+		}
 	}
 }

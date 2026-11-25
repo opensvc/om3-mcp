@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"fmt"
-	"strings"
 )
 
 // certificateKeys are the keys a certificate creation writes in a sec.
@@ -97,7 +96,7 @@ func (s *Service) RenewObjectCertificate(ctx context.Context, path string) (Obje
 }
 
 func validateCertificateTarget(path string) (ClusterObjectReference, error) {
-	if strings.ContainsAny(path, "*?[],\\") {
+	if hasSelectorCharacters(path) {
 		return ClusterObjectReference{}, fmt.Errorf("path must be one exact OpenSVC object path, without wildcard or selector")
 	}
 	reference, err := validateExactObjectPath(path)

@@ -57,7 +57,7 @@ type ObjectConfigUpdate struct {
 	KeywordsError string                `json:"keywords_error,omitempty" jsonschema:"why the keywords could not be read again; the write itself is done"`
 	// SecretsOmitted counts the secret keywords written and left out of
 	// the read back: written, never returned.
-	SecretsOmitted int `json:"secrets_omitted,omitempty" jsonschema:"the number of secret keywords the operations name, cluster.secret and node.uuid, left out of the keywords read again: written, their values are never returned"`
+	SecretsOmitted int `json:"secrets_omitted,omitempty" jsonschema:"the number of secret keywords the operations name, cluster.secret, node.uuid and store.ssh_private_key, left out of the keywords read again: written, their values are never returned"`
 }
 
 // daemonProblem is an error answer of the daemon, its status and the detail
@@ -174,7 +174,7 @@ func (s *Service) UpdateObjectConfig(ctx context.Context, options UpdateObjectCo
 
 // validateConfigWritePath accepts one exact object path, as the actions do.
 func validateConfigWritePath(path string) (ClusterObjectReference, error) {
-	if strings.ContainsAny(path, "*?[],\\") {
+	if hasSelectorCharacters(path) {
 		return ClusterObjectReference{}, fmt.Errorf("path must be one exact OpenSVC object path, without wildcard or selector")
 	}
 	return validateExactObjectPath(path)

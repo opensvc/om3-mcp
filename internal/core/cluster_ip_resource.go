@@ -51,7 +51,7 @@ type IPResourceInfo struct {
 func (s *Service) ListClusterIPResources(ctx context.Context, options ListClusterIPResourcesOptions) (ClusterIPResourceList, error) {
 	path := strings.TrimSpace(options.Path)
 	if path != "" {
-		if strings.ContainsAny(path, "*?[],\\") {
+		if hasSelectorCharacters(path) {
 			return ClusterIPResourceList{}, fmt.Errorf("path must be one exact canonical OpenSVC object path")
 		}
 		reference, err := validateExactObjectPath(path)

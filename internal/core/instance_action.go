@@ -199,7 +199,7 @@ func (s *Service) RunInstanceAction(ctx context.Context, path string, node strin
 // validateInstanceTarget checks the exact object, of a kind the action
 // accepts, and the exact node of the instance.
 func validateInstanceTarget(path string, node string, action string, kinds []string) (ClusterObjectReference, error) {
-	if strings.ContainsAny(path, "*?[],\\") {
+	if hasSelectorCharacters(path) {
 		return ClusterObjectReference{}, fmt.Errorf("path must be one exact OpenSVC object path, without wildcard or selector")
 	}
 	reference, err := validateExactObjectPath(path)

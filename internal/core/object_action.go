@@ -131,7 +131,7 @@ func (s *Service) SubmitObjectAction(ctx context.Context, path string, action Ob
 	if !known {
 		return ObjectActionResult{}, fmt.Errorf("unsupported object action %q", action)
 	}
-	if strings.ContainsAny(path, "*?[],\\") {
+	if hasSelectorCharacters(path) {
 		return ObjectActionResult{}, fmt.Errorf("path must be one exact OpenSVC object path, without wildcard or selector")
 	}
 	reference, err := validateExactObjectPath(path)

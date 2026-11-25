@@ -436,7 +436,8 @@ func secretsOfSection(config ObjectConfig, section string) int {
 	}
 	count := 0
 	for _, keyword := range secretKeywords {
-		if strings.HasPrefix(keyword, strings.ToLower(section)+".") {
+		base, _, _ := strings.Cut(strings.ToLower(section), "#")
+		if strings.HasPrefix(keyword, base+".") {
 			count++
 		}
 	}

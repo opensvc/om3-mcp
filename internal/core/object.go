@@ -24,11 +24,12 @@ type ListClusterObjectsOptions struct {
 type ClusterObjectList struct {
 	Provenance Provenance               `json:"provenance" jsonschema:"API source and MCP collection time of this result"`
 	Selector   string                   `json:"selector" jsonschema:"the OpenSVC object selector used for this page"`
-	Total      int                      `json:"total" jsonschema:"the total number of objects matching the selector and caller grants"`
+	Total      int                      `json:"total" jsonschema:"the total number of objects matching the selector and caller grants; for a configuration term, among the objects whose configuration the answering node holds"`
 	Count      int                      `json:"count" jsonschema:"the number of objects returned in this page"`
 	Objects    []ClusterObjectReference `json:"objects" jsonschema:"sorted references to matching OpenSVC objects"`
 	NextCursor string                   `json:"next_cursor,omitempty" jsonschema:"the cursor to pass to retrieve the next page"`
 	Truncated  bool                     `json:"truncated" jsonschema:"whether more matching objects remain after this page"`
+	TermNote   string                   `json:"term_note,omitempty" jsonschema:"set when the selector holds a configuration term: what the daemon could not see"`
 }
 
 type ClusterObjectReference struct {
@@ -48,6 +49,10 @@ func (s *Service) ListClusterObjects(ctx context.Context, options ListClusterObj
 	}
 	if len(options.Cursor) > maxObjectCursorLength {
 		return ClusterObjectList{}, fmt.Errorf("object cursor exceeds %d characters", maxObjectCursorLength)
+	}
+	configuration, err := checkSelectorTerms(selector)
+	if err != nil {
+		return ClusterObjectList{}, err
 	}
 
 	limit := options.Limit
@@ -101,6 +106,9 @@ func (s *Service) ListClusterObjects(ctx context.Context, options ListClusterObj
 	}
 	if result.Truncated {
 		result.NextCursor = objects[len(objects)-1].Path
+	}
+	if configuration {
+		result.TermNote = objectSelectorTermNote
 	}
 	result.Provenance = s.newProvenance()
 	return result, nil
@@ -169,4 +177,67 @@ func canonicalObjectPath(reference ClusterObjectReference) string {
 	default:
 		return reference.Kind + "/" + reference.Name
 	}
+}
+
+// objectSelectorTermNote tells, beside a result of configuration terms, what
+// the daemon could not see.
+const objectSelectorTermNote = "a configuration term reads only the configurations the answering node holds: an object whose nodes do not include it is missing from this result, which does not prove that none exists"
+
+// checkSelectorTerms refuses the configuration terms of a selector that
+// would disclose a value the MCP never returns, or select by a comparison
+// the daemon evaluates wrong, and says whether the selector holds one. The
+// daemon matches a term on any keyword, with = != < > <= >=, and the count
+// of the objects matching answers one comparison: a term on a secret keyword
+// or a data key, which no read returns, would give its value one comparison
+// at a time. An order is not offered: om3 converts the values of a typed
+// keyword, and compares those of the others as text. A negation of a term
+// selects the objects whose configuration the answering node does not hold,
+// as not matching. The selector is split as om3 splits it, on the commas,
+// then on the +, a ! before a term negating it; om3 reads a term holding
+// * ? [ or ] as a path pattern, and the operator of a term as its leftmost.
+func checkSelectorTerms(selector string) (bool, error) {
+	configuration := false
+	for _, group := range strings.Split(selector, ",") {
+		for _, term := range strings.Split(group, "+") {
+			if strings.TrimSpace(term) == "" {
+				return false, fmt.Errorf("object selector %q holds an empty term, around a + or a comma", selector)
+			}
+			if strings.TrimSpace(term) != term {
+				return false, fmt.Errorf("object selector term %q begins or ends with a space: write keyword=value, with no space around a + or a comma", term)
+			}
+			positive := strings.TrimLeft(term, "!")
+			if strings.ContainsAny(positive, "*?[]") {
+				continue
+			}
+			at := strings.IndexAny(positive, "=<>")
+			exists := at < 0 && strings.HasSuffix(positive, ":")
+			if at < 0 && !exists {
+				continue
+			}
+			configuration = true
+			keyword := strings.TrimSuffix(positive, ":")
+			if !exists {
+				keyword = strings.TrimRight(positive[:at], "!-|^")
+			}
+			if strings.TrimSpace(keyword) != keyword || (!exists && strings.HasPrefix(positive[at+1:], " ")) {
+				return false, fmt.Errorf("object selector term %q holds a space around its keyword or its operator: write keyword=value", term)
+			}
+			if positive != term {
+				return false, fmt.Errorf("object selector term %q negates a configuration term, which would select the objects whose configuration the answering node does not hold: use keyword!=value", term)
+			}
+			if !exists && strings.ContainsAny(positive[at:at+1], "<>") {
+				return false, fmt.Errorf("object selector term %q compares an order, not offered: om3 converts the values of a typed keyword and compares the others as text; use keyword=value or keyword!=value", term)
+			}
+			if isSecretKeyword(keyword) {
+				return false, fmt.Errorf("object selector term %q names a secret keyword, whose value no tool reads", term)
+			}
+			if isDataKeyword(keyword) {
+				return false, fmt.Errorf("object selector term %q names a data key: list_object_data_keys gives the keys of an object, get_object_data_key the value of a cfg key", term)
+			}
+			if base, scope, scoped := strings.Cut(keyword, "@"); scoped && !strings.Contains(base, ".") && strings.Contains(scope, ".") {
+				return false, fmt.Errorf("object selector term %q scopes a keyword without its section: write the section, such as DEFAULT.%s", term, keyword)
+			}
+		}
+	}
+	return configuration, nil
 }

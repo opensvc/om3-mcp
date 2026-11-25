@@ -28,7 +28,7 @@ type Preview struct {
 	Warnings []string `json:"warnings,omitempty" jsonschema:"what limits the preview, such as a read cut short"`
 	// SecretsOmitted counts the changes on secret keys, whose values are
 	// never shown.
-	SecretsOmitted int `json:"secrets_omitted,omitempty" jsonschema:"the number of changes on secret keys, cluster.secret and node.uuid, or data keys of a secret, whose values are not shown"`
+	SecretsOmitted int `json:"secrets_omitted,omitempty" jsonschema:"the number of changes on secret keys, cluster.secret, node.uuid and store.ssh_private_key, or data keys of a secret, whose values are not shown"`
 }
 
 // PreviewSummary is the sentence of a preview, and what a client composes
