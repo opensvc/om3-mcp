@@ -73,7 +73,7 @@ var toolKeywords = map[string][]string{
 	"get_cluster_status":             {"cluster overview", "cluster health", "heartbeat", "quorum", "nodes state"},
 	"get_container_logs":             {"docker logs", "podman logs", "container output", "stdout", "stderr"},
 	"get_daemon_log_level":           {"log level", "daemon verbosity", "journald level"},
-	"get_instance_logs":              {"instance log", "orchestration log", "why failed", "action log"},
+	"get_instance_logs":              {"instance log", "orchestration log", "why failed", "action log", "start failed", "cause of a failure", "error message", "pourquoi en échec"},
 	"get_instance_resource_file":     {"resource file", "replicated file", "kvm xml", "domain definition", "sub_devs", "lxc config"},
 	"get_instance_status":            {"instance details", "resources status", "monitor state", "instance health"},
 	"get_node_config":                {"node.conf", "node settings", "node configuration"},

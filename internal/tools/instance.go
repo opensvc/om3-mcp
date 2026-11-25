@@ -63,7 +63,7 @@ func RegisterInstanceTools(registrar *Registrar, service *core.Service) error {
 		&mcp.Tool{
 			Name:        "get_instance_status",
 			Title:       "Get instance status",
-			Description: "Read the cached configuration, monitor and detailed resource status of one exact OpenSVC object instance after list_object_instances. Nested inventories are sorted and bounded with explicit truncation metadata; placement and message order are preserved. This passive read does not run status drivers; inspect each block's updated_at for freshness. Requires guest access on the object's namespace.",
+			Description: "Read the cached configuration, monitor and detailed resource status of one exact OpenSVC object instance after list_object_instances. Nested inventories are sorted and bounded with explicit truncation metadata; placement and message order are preserved. This passive read does not run status drivers; inspect each block's updated_at for freshness. A monitor state ending in failed, such as start failed, keeps no error: its cause is in get_instance_logs, which failure_note recalls. Requires guest access on the object's namespace.",
 			Annotations: readOnlyClosedWorldAnnotations(),
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input GetInstanceStatusInput) (*mcp.CallToolResult, GetInstanceStatusOutput, error) {
@@ -79,7 +79,7 @@ func RegisterInstanceTools(registrar *Registrar, service *core.Service) error {
 		&mcp.Tool{
 			Name:        "get_instance_logs",
 			Title:       "Get instance logs",
-			Description: "Read bounded recent OpenSVC orchestration and daemon logs for one exact object instance. This finite read does not follow the stream and does not return workload stdout or stderr; the daemon currently requires root access for this endpoint.",
+			Description: "Read bounded recent OpenSVC orchestration and daemon logs for one exact object instance: they hold the errors of its actions, such as the cause of a start failed, a command not found, a device missing or an image not pulled, which its status does not keep. This finite read does not follow the stream and does not return workload stdout or stderr; the daemon currently requires root access for this endpoint.",
 			Annotations: readOnlyClosedWorldAnnotations(),
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input GetInstanceLogsInput) (*mcp.CallToolResult, GetInstanceLogsOutput, error) {

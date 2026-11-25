@@ -31,6 +31,12 @@ exact node instance. Use
 `refresh_instance_status` only when the selected instance's `updated_at` is too
 old for the diagnosis.
 
+A monitor state ending in `failed`, such as `start failed` or `provision
+failed`, keeps the state, not the error of the resource that failed: the
+cause, a command not found, a device missing or an image not pulled, is in the
+logs of the instance. `get_instance_status` then adds `failure_note`, which
+names `get_instance_logs` for that path and node.
+
 ## Tools
 
 ### `get_instance_status`
