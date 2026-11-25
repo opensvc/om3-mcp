@@ -48,7 +48,7 @@ type daemonObjectDataKeyList struct {
 // stores, never their values. The daemon reads the copy of the object on
 // itself when it has one, else on one node holding it.
 func (s *Service) ListObjectDataKeys(ctx context.Context, options ListObjectDataKeysOptions) (ObjectDataKeyList, error) {
-	if strings.ContainsAny(options.Path, "*?[],\\") {
+	if hasSelectorCharacters(options.Path) {
 		return ObjectDataKeyList{}, fmt.Errorf("path must be one exact OpenSVC object path, without wildcard or selector")
 	}
 	reference, err := validateExactObjectPath(options.Path)

@@ -8,7 +8,6 @@ import (
 	"net/netip"
 	"net/url"
 	"sort"
-	"strings"
 )
 
 const (
@@ -90,7 +89,7 @@ func (s *Service) ListNetworkIPs(ctx context.Context, options ListNetworkIPsOpti
 	}
 	var object *ClusterObjectReference
 	if options.Path != "" {
-		if strings.ContainsAny(options.Path, "*?[],\\") {
+		if hasSelectorCharacters(options.Path) {
 			return NetworkIPList{}, fmt.Errorf("path must be one exact OpenSVC object path, without wildcard or selector")
 		}
 		reference, err := validateExactObjectPath(options.Path)

@@ -218,3 +218,28 @@ func TestGetJSONDoesNotExposeJWTInHTTPError(t *testing.T) {
 		t.Fatalf("error exposes JWT: %q", err)
 	}
 }
+
+// A selector of configuration terms reaches the daemon as it was given: its +
+// encoded, not read as a space.
+func TestGetJSONEncodesASelectorOfTerms(t *testing.T) {
+	selector := "prod/svc/*+app=web+env!=PRD,prod/svc/*+fs.type=flag"
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if got := request.URL.Query().Get("path"); got != selector {
+			t.Errorf("got selector %q, want %q", got, selector)
+		}
+		if strings.Contains(request.URL.RawQuery, "+") {
+			t.Errorf("got raw query %q, want the + encoded", request.URL.RawQuery)
+		}
+		response.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(response, `[]`)
+	}))
+	defer server.Close()
+	apiClient, err := New(server.URL, daemonTestHTTPClient(server.Client(), "test-daemon-token"))
+	if err != nil {
+		t.Fatalf("create API client: %v", err)
+	}
+	var output []string
+	if err := apiClient.GetJSON(context.Background(), "/api/object/path", url.Values{"path": {selector}}, &output); err != nil {
+		t.Fatalf("GET JSON: %v", err)
+	}
+}

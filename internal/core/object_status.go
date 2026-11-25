@@ -111,9 +111,24 @@ func validateExactObjectPath(path string) (ClusterObjectReference, error) {
 	if len(path) > maxObjectSelectorLength {
 		return ClusterObjectReference{}, fmt.Errorf("object path exceeds %d characters", maxObjectSelectorLength)
 	}
+	if hasSelectorCharacters(path) {
+		return ClusterObjectReference{}, fmt.Errorf("object path %q holds characters of a selector: give one exact path; list_cluster_objects selects several", path)
+	}
 	reference, err := parseClusterObjectReference(path)
 	if err != nil {
 		return ClusterObjectReference{}, fmt.Errorf("invalid object path %q: %w", path, err)
 	}
 	return reference, nil
+}
+
+// objectSelectorCharacters are those a selector holds and an object path
+// never does: a pattern, an alternative, a conjunction, a negation, a
+// configuration term or a space. The daemon expands the path of a request as
+// a selector, configuration terms included, which compare values the MCP
+// never returns: an exact path holding one is refused before the call.
+const objectSelectorCharacters = "*?[],\\+!=:<> \t"
+
+// hasSelectorCharacters says whether path holds a character of a selector.
+func hasSelectorCharacters(path string) bool {
+	return strings.ContainsAny(path, objectSelectorCharacters)
 }

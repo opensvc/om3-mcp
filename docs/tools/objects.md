@@ -58,13 +58,60 @@ resource, schedule, and secret payloads.
 GET /api/object/path?path=<selector>
 ```
 
+The selector is the native one of om3, passed unchanged: a path pattern, such
+as `prod/**` or `*/svc/*`, or a configuration term, `keyword=value` or
+`keyword!=value`. The keyword is one of the `DEFAULT` section, such as `app` or
+`env`, or `section.keyword`: `fs#1.type` for one resource, `fs.type` for every
+`fs` section. `+` joins the terms that must all match:
+`prod/svc/*+app=web+env=DEV` gives the services of the app web in development
+in one call, rather than one `get_object_config` per object. A comma separates
+alternatives, each a whole group of `+`-joined terms, which repeats its path
+pattern: `prod/svc/*+app=web,prod/svc/*+app=api`, not
+`prod/svc/*+app=web,app=api`, whose second group selects in every namespace.
+
+What a term matches, as the daemon evaluates it:
+
+- only a keyword set in the configuration file, never a default: `orchestrate=no`
+  misses the objects left at the default, and `app!=web` the objects without
+  `app`;
+- the value as written, not evaluated: `env.foo=web` misses `foo = {name}`; a
+  scoped value only by its scoped keyword, `DEFAULT.env@n1=DEV` and not
+  `env=DEV` for `env@n1 = DEV`; a list whole, `nodes=dev5n1 dev5n2` and not
+  `nodes=dev5n2`;
+- the value of a text keyword exactly, case included, without wildcard:
+  `env=prd` or `app=we*` select nothing; a typed keyword is converted,
+  `disable=yes` matching `disable = true`;
+- only the configurations held by the node that answers, the node of the
+  cluster virtual IP: the daemon evaluates the term on its own files, and a
+  node holds only those of the objects whose `nodes` include it, so that the
+  others are missing from the answer. The result then carries `term_note`.
+
+The MCP refuses, before the call, with a message saying what to write:
+
+- a term on a keyword it never returns, a secret keyword or a `data.*` key:
+  the count of the matching objects would disclose their values one
+  comparison at a time;
+- a term that compares an order, `<`, `>`, `<=` or `>=`, not offered: om3
+  converts the values of a typed keyword, such as `priority` or a size, and
+  compares those of the others as text;
+- a negation of a term, `!app=web`: it would select the objects whose
+  configuration the answering node does not hold, as not matching;
+  `app!=web` compares the value, and a negated path pattern,
+  `*/svc/*+!prod/**`, stays exact;
+- a space around a term, its keyword or its operator, and an empty term: the
+  daemon would select nothing, or fail. A space inside a value, a list, is
+  kept;
+- a keyword scoped to a node name with a dot but no section,
+  `env@n1.example.com=DEV`: write `DEFAULT.env@n1.example.com=DEV`.
+
 The MCP removes duplicate paths, parses them into stable references, sorts them
 by canonical path, and then applies pagination.
 
 OpenSVC returns only paths visible through the caller's namespace grants. An
-empty result can mean either no matching object or no visibility; the MCP does
-not distinguish these cases because doing so could disclose unauthorized
-inventory.
+empty result can mean no matching object, no visibility or, for a
+configuration term, an object whose configuration the answering node does not
+hold; the MCP does not distinguish these cases because doing so could disclose
+unauthorized inventory.
 
 #### MCP properties
 
@@ -74,7 +121,7 @@ This tool is read-only, non-destructive, closed-world, and has no side effects.
 
 | Field | Required | Default | Bounds | Meaning |
 |---|---:|---:|---:|---|
-| `selector` | No | `**` | 512 characters | Native OpenSVC object selector |
+| `selector` | No | `**` | 512 characters | Native OpenSVC object selector: a path pattern or configuration terms |
 | `limit` | No | 100 | 1..200 | Maximum references in this page |
 | `cursor` | No | Empty | 1024 characters | Previous `next_cursor` for the same selector |
 
@@ -86,6 +133,9 @@ Common selectors:
 | `*/svc/*` | All visible service objects |
 | `prod/**` | All visible objects in namespace `prod` |
 | `prod/svc/redis` | One exact object |
+| `prod/svc/*+app=web` | The services of `prod` whose configuration sets `app = web` |
+| `*/svc/*+env=DEV+fs.type=flag` | The services in development with a flag `fs` resource |
+| `prod/svc/*+app=web,prod/svc/*+app=api` | The services of `prod` of the app web or api |
 
 Example input:
 
@@ -119,6 +169,9 @@ Example input:
 }
 ```
 
+A selector holding a configuration term adds `term_note`, which recalls that
+the objects whose configuration the answering node does not hold are missing.
+
 When `truncated=true`, call the tool again with the same selector and limit and
 pass `next_cursor` as `cursor`. Pagination is recalculated from current daemon
 inventory and is not snapshot-based.
@@ -150,9 +203,12 @@ in cfg, sec, or usr objects.
 GET /api/object?path=<exact-path>
 ```
 
-The MCP requires exactly one returned object. This read does not execute status
-drivers: compare `updated_at` with the current time before relying on the state.
-Use `list_object_instances` to inspect per-node timestamps,
+The daemon expands the `path` of this request as a selector, configuration
+terms included: the MCP refuses before the call an exact path holding a
+character of a selector, `* ? [ ] , \ + ! = : < >` or a space, as it does for
+every tool taking one exact object path. The MCP requires exactly one returned
+object. This read does not execute status drivers: compare `updated_at` with
+the current time before relying on the state. Use `list_object_instances` to inspect per-node timestamps,
 `get_instance_status` for one instance's cached configuration, monitor, and
 resource details, and `refresh_instance_status` when an explicit probe is
 necessary.
@@ -455,8 +511,9 @@ The cluster configuration is the object `cluster`, `root/ccfg/cluster`:
 cluster`, its `hb` and `arbitrator` sections included; `get_cluster_config`
 reads its file, redacted.
 
-The two keywords om3 declares secret, `cluster.secret` and `node.uuid`, are
-never returned either, whatever their scope: `cluster.secret` is scopable,
+The keywords om3 declares secret, `cluster.secret`, `node.uuid` and
+`store.ssh_private_key`, are never returned either, whatever their scope and
+the index of their section (`store#1.ssh_private_key`): `cluster.secret` is scopable,
 and the daemon gives a value scoped to a node in the keyword itself,
 `cluster.secret@n1`, which the MCP compares without its scope, as the daemon
 redaction of a file compares the base option. The daemon gives them in clear to `root` through the

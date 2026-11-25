@@ -65,7 +65,7 @@ func (s *Service) GetObjectDataKey(ctx context.Context, path string, name string
 // validateDataKeyTarget accepts one exact object path of one of kinds, and
 // one key name, as list_object_data_keys gives them.
 func validateDataKeyTarget(path string, name string, kinds []string) (ClusterObjectReference, error) {
-	if strings.ContainsAny(path, "*?[],\\") {
+	if hasSelectorCharacters(path) {
 		return ClusterObjectReference{}, fmt.Errorf("path must be one exact OpenSVC object path, without wildcard or selector")
 	}
 	reference, err := validateExactObjectPath(path)
