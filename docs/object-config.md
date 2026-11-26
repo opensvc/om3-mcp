@@ -7,7 +7,8 @@ of the daemon, which `list_object_config_keywords` gives.
 
 The daemon validates a configuration, and refuses a value it does not accept,
 but it holds a keyword it does not know for a warning: the keyword is
-written, and nothing says so. Write only the keywords the catalog gives.
+written, and the write says nothing of it; `validate_object_config` tells
+it. Write only the keywords the catalog gives.
 OpenSVC v2 wrote some keywords and references otherwise: do not rely on
 memory.
 

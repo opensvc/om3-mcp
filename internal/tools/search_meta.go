@@ -155,6 +155,7 @@ var toolKeywords = map[string][]string{
 	"update_instance_caps":           {"apply limits", "cgroup", "pg update", "memory limit on node", "cpu limit on node"},
 	"update_node_config":             {"set node setting", "change node config", "edit node.conf", "configure heartbeat", "set node env"},
 	"update_object_config":           {"edit config", "change setting", "set keyword", "modify configuration", "configure", "unset", "set cluster", "cluster config"},
+	"validate_object_config":         {"lint", "typo", "syntax check", "check the config", "why is the config in error", "is the config valid", "bad keyword", "config errors"},
 }
 
 // searchMeta is the _meta of a tool for the tool search. Every tool has

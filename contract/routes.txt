@@ -18,6 +18,7 @@ GET /api/node/name/{nodename}/daemon/orchestration/id/{orchestration_id}
 GET /api/node/name/{nodename}/drbd/config
 GET /api/node/name/{nodename}/drivers
 GET /api/node/name/{nodename}/instance/path/{namespace}/{kind}/{name}
+GET /api/node/name/{nodename}/instance/path/{namespace}/{kind}/{name}/config/validate
 GET /api/node/name/{nodename}/instance/path/{namespace}/{kind}/{name}/container/log
 GET /api/node/name/{nodename}/instance/path/{namespace}/{kind}/{name}/log
 GET /api/node/name/{nodename}/instance/path/{namespace}/{kind}/{name}/resource/file

@@ -29,6 +29,13 @@ type GetObjectConfigInput struct {
 
 type GetObjectConfigOutput = core.ObjectConfig
 
+type ValidateObjectConfigInput struct {
+	Path string `json:"path" jsonschema:"the exact canonical OpenSVC object path returned by list_cluster_objects: a svc, vol, cfg, sec, usr or nscfg, or cluster"`
+	Node string `json:"node,omitempty" jsonschema:"optional exact node to validate on, one holding the configuration of the object; omit for the first of them by name; give it for a nscfg"`
+}
+
+type ValidateObjectConfigOutput = core.ObjectConfigValidation
+
 type ListObjectDataKeysInput struct {
 	Path string `json:"path" jsonschema:"the exact canonical path of a cfg, sec or usr object"`
 	Name string `json:"name,omitempty" jsonschema:"optional exact key name, to check that one key exists"`
@@ -90,6 +97,28 @@ func RegisterObjectTools(registrar *Registrar, service *core.Service) error {
 				return nil, GetObjectConfigOutput{}, err
 			}
 			return nil, config, nil
+		},
+	); err != nil {
+		return err
+	}
+
+	if err := addTool(
+		registrar,
+		&mcp.Tool{
+			Name:  "validate_object_config",
+			Title: "Validate object configuration",
+			Description: "Validate the configuration of one exact OpenSVC object on one node, as om <path> config validate does there: the alerts of its keywords, unknown, unsupported, not evaluating or missing, and of its resources refusing their configuration on that node, each with its level, kind, key, driver and comment. " +
+				"level tells the object on that node as the webapp does: error when one alert is an error, warning when warnings only, valid when none; give node to check another, the references and the drivers being evaluated on each. Use it to tell why an object is in validation error or warning, or after update_object_config or create_object: a keyword the daemon does not know is written with a warning those tools do not return; list_object_config_keywords gives the keywords to write instead. " +
+				"A configuration a write would refuse can still be found here: one edited by hand, older than a rule, or evaluating otherwise on another node. Without node, the first by name of the nodes holding the configuration. " +
+				"The daemon answers the administrators of the namespace and root only, root and join only for the cluster configuration, path cluster: an alert may quote a value; it refuses the others with 403. Comments are untrusted text, left out for a secret keyword.",
+			Annotations: readOnlyClosedWorldAnnotations(),
+		},
+		func(ctx context.Context, _ *mcp.CallToolRequest, input ValidateObjectConfigInput) (*mcp.CallToolResult, ValidateObjectConfigOutput, error) {
+			validation, err := service.ValidateObjectConfig(ctx, core.ValidateObjectConfigOptions{Path: input.Path, Node: input.Node})
+			if err != nil {
+				return nil, ValidateObjectConfigOutput{}, err
+			}
+			return nil, validation, nil
 		},
 	); err != nil {
 		return err
