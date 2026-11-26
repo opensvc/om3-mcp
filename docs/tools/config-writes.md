@@ -81,7 +81,8 @@ query, applied by the daemon in this order:
 - **Unknown keywords.** The daemon validation holds a keyword it does not
   know for a warning, not an error: the keyword is written, and the PATCH
   answer does not return the warning. The description of the tool tells the
-  model to check a keyword with `list_object_config_keywords` first.
+  model to check a keyword with `list_object_config_keywords` first, and
+  `validate_object_config` gives the warnings of the configuration written.
 - **Refusals of the daemon**, given as it reports them: 400 for a value it
   does not accept; 403 for a keyword of a resource changed,
   its type or `disable`, or its section deleted, while the resource is up on

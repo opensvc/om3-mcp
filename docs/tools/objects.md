@@ -4,6 +4,7 @@ tools:
   - list_cluster_objects
   - get_object_status
   - get_object_config
+  - validate_object_config
   - list_object_config_keywords
   - list_object_data_keys
   - get_object_data_key
@@ -18,8 +19,8 @@ aggregate status.
 Implementation:
 
 - business logic: `internal/core/object.go`, `internal/core/object_status.go`,
-  `internal/core/config_object.go`, `internal/core/config_object_keyword.go`,
-  and `internal/core/object_data_key.go`;
+  `internal/core/config_object.go`, `internal/core/config_object_validate.go`,
+  `internal/core/config_object_keyword.go`, and `internal/core/object_data_key.go`;
 - MCP definitions: `internal/tools/object.go`.
 
 ## Tool selection
@@ -38,6 +39,9 @@ which lists the state of the visible actor objects, rather than one
 `list_object_instances` when an aggregate object state requires node-level
 diagnosis. Use `get_object_config` when the diagnosis requires declared driver,
 resource, placement, or orchestration settings.
+Use `validate_object_config` to tell why an object is in validation error or
+warning, as the webapp shows it, or after a write: a keyword the daemon does
+not know is written with a warning the write tools do not return.
 Use `list_object_config_keywords` to discover which options an object kind or
 configured driver supports, their defaults, constraints, and documentation.
 It returns definitions, not the object's configured values.
@@ -526,12 +530,124 @@ not set. The read back of `update_object_config` goes through the same read,
 and returns the same count in its own `secrets_omitted`: a secret written is
 not read back.
 
+### `validate_object_config`
+
+Validates the configuration of one exact object on one node, as
+`om <path> config validate` does there, and returns its alerts. It works for
+every object holding a configuration: svc, vol, cfg, sec, usr, nscfg, and the
+cluster configuration (`path: cluster`).
+
+#### OpenSVC API and safety
+
+```text
+GET /api/node/name/<node>/instance/path/<namespace>/<kind>/<name>/config/validate
+```
+
+The daemon of the node validates the configuration it holds: the alerts of
+the keywords, unknown, unsupported, not evaluating or missing a keyword a
+strategy requires, and those of the resources refusing their configuration
+when the object loads them, by checks their drivers make on that node. The
+references are evaluated there, so the result may differ from one node to
+another.
+
+A write refuses a configuration holding an error (HTTP `400` from
+`update_object_config` or `create_object`), and writes an unknown keyword with
+a warning it does not return. An object can still be in error: a
+configuration edited by hand, older than a rule, or evaluating otherwise on
+another node. This tool finds them.
+
+Without `node`, the MCP reads the object status and validates on the first
+node by name of those holding its configuration, as the webapp does, else of
+its scope, and says so with `node_chosen`. `level` is that of this node: give
+`node` to check another. An object it cannot choose a node for, such as a
+namespace configuration the object status may not list, asks for one.
+
+The daemon answers the administrators of the namespace, the cluster
+administrators and root only: an alert may quote a value. It refuses the
+others with HTTP `403`, its reason returned as it gives it. The cluster
+configuration takes root or join, which the tool adds to the refusal.
+Comments are untrusted text. The comment of an alert of a secret keyword,
+`cluster.secret`, `node.uuid`, `store.ssh_private_key`, or a data key of a sec
+or usr, is left out all the same, as every read of the MCP leaves the secrets
+out.
+
+The answer of the daemon is checked: a list of another kind, without its
+items, or an alert of another node, another object or a level neither
+`error` nor `warning` fails the call, rather than read as valid.
+
+#### MCP properties
+
+This tool is read-only, non-destructive, closed-world, and has no side effects.
+
+#### Input
+
+| Field | Required | Default | Bounds | Meaning |
+|---|---:|---:|---:|---|
+| `path` | Yes | — | 512 characters | Exact canonical object path, no selector |
+| `node` | No | The first node by name holding the configuration, else of the scope | One exact node name, not `_` | The node to validate on; required for a nscfg the object status does not list |
+
+Example input:
+
+```json
+{
+  "path": "data/vol/lake-01-data"
+}
+```
+
+#### Example output
+
+```json
+{
+  "provenance": {
+    "source": "opensvc_daemon",
+    "observed_at": "2026-11-26T16:40:00Z"
+  },
+  "object": {
+    "kind": "vol",
+    "name": "lake-01-data",
+    "namespace": "data",
+    "path": "data/vol/lake-01-data"
+  },
+  "node": "dev5n1",
+  "node_chosen": true,
+  "level": "warning",
+  "error_count": 0,
+  "warning_count": 1,
+  "alerts": [
+    {
+      "level": "warning",
+      "kind": "unknown keyword",
+      "key": "disk#0.name",
+      "driver": "disk.loop",
+      "comment": "keyword does not exist: \"disk#0.name\""
+    }
+  ],
+  "truncated": false
+}
+```
+
+`level` tells the object on that node as the webapp does: `error` when one
+alert at least is an error, `warning` when warnings only, `valid` when none.
+The alerts come errors first, then by key, at most 200, and at most 64 KiB of
+comments together: `truncated` says some were left out, `error_count` and
+`warning_count` count them all. A comment is at most 1 KiB, its cut counted
+in `comments_truncated`; a kind, a key or a driver at most 255 bytes. A
+keyword of `DEFAULT` comes without its section, `a` for `DEFAULT.a`.
+
+The errors are: an unscopable keyword, an unsupported value, an evaluation
+error, an invalid section name, a resource configuration error (a warning for
+a disabled resource), a key source error, an unsupported resource group, a
+missing strategy and a missing keyword. The warnings: unknown keyword, section,
+driver or resource, deprecated or moved keyword or value, ignored keyword,
+conflicting strategies, and a driver unusable on the node.
+
 ## Errors
 
 | Condition | Result |
 |---|---|
 | Missing, invalid or expired access token (OAuth on HTTPS, OpenID Connect on the socket) | MCP HTTP `401` |
 | Invisible or unauthorized object | Tool error from the daemon; commonly HTTP `403` or an empty selection |
+| `validate_object_config` by a caller neither administrator of the namespace nor root | Tool error with the HTTP `403` of the daemon and its reason |
 | Invalid selector, path, limit, cursor, or keyword filter | Tool validation or daemon error |
 | Conflicting definition `driver` and `section` filters | Tool validation error before calling the daemon |
 | Missing object or unexpected selection | Tool error; no partial result |
