@@ -37,8 +37,10 @@ func NewDelegated(catalog *clusterconfig.Catalog) (*DelegatedClient, error) {
 		base := &http.Transport{
 			// Explicit per-cluster demo option. HTTPS and origin binding remain
 			// required, but the peer is NOT authenticated when this is true.
-			TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots, InsecureSkipVerify: cluster.TLSInsecure},
-			TLSHandshakeTimeout: cluster.RequestTimeout, IdleConnTimeout: 90 * time.Second, MaxIdleConns: 2, MaxIdleConnsPerHost: 2,
+			TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots, InsecureSkipVerify: cluster.TLSInsecure},
+			// Four idle connections, as validate_object_configs sends four
+			// validations at once: fewer would open a TLS connection for most.
+			TLSHandshakeTimeout: cluster.RequestTimeout, IdleConnTimeout: 90 * time.Second, MaxIdleConns: 4, MaxIdleConnsPerHost: 4,
 			// Proxy is intentionally nil: delegated credentials travel directly.
 		}
 		httpClient := &http.Client{

@@ -31,7 +31,7 @@ const (
 // coreTools are always shown to the model: the state of the cluster, of its
 // objects, instances and nodes, and the identity of the caller. The other
 // tools are found by a search.
-var coreTools = []string{"get_cluster_status", "list_cluster_objects", "get_object_status", "get_instance_status", "get_node_status", "get_caller_identity"}
+var coreTools = []string{"get_cluster_status", "list_cluster_objects", "get_object_status", "get_instance_status", "get_node_status", "get_caller_identity", "validate_object_configs"}
 
 // previewTools are the tools that tell what a write would do with its own
 // arguments; the actions with a sentence are told by previewActionTool.
@@ -156,6 +156,7 @@ var toolKeywords = map[string][]string{
 	"update_node_config":             {"set node setting", "change node config", "edit node.conf", "configure heartbeat", "set node env"},
 	"update_object_config":           {"edit config", "change setting", "set keyword", "modify configuration", "configure", "unset", "set cluster", "cluster config"},
 	"validate_object_config":         {"lint", "typo", "syntax check", "check the config", "why is the config in error", "is the config valid", "bad keyword", "config errors"},
+	"validate_object_configs":        {"bad configuration", "configuration problems", "misconfigured services", "which configs are wrong", "config audit", "configurations problématiques", "mauvaise configuration"},
 }
 
 // searchMeta is the _meta of a tool for the tool search. Every tool has

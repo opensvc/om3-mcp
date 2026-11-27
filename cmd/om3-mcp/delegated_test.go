@@ -220,7 +220,7 @@ func TestDelegatedSocketVerifiesLocallyThenAtTheSelectedClusterDaemon(t *testing
 		}
 	}
 	slices.Sort(core)
-	if strings.Join(core, ",") != "get_caller_identity,get_cluster_status,get_instance_status,get_node_status,get_object_status,list_cluster_objects" {
+	if strings.Join(core, ",") != "get_caller_identity,get_cluster_status,get_instance_status,get_node_status,get_object_status,list_cluster_objects,validate_object_configs" {
 		t.Fatalf("core tools = %v", core)
 	}
 	beforeB := calls["cluster-b"].Load()

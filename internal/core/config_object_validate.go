@@ -100,7 +100,19 @@ func (s *Service) ValidateObjectConfig(ctx context.Context, options ValidateObje
 	} else if err := validateNodeTarget(node); err != nil {
 		return ObjectConfigValidation{}, err
 	}
+	result, err := s.validateObjectConfigOn(ctx, reference, node)
+	if err != nil {
+		return ObjectConfigValidation{}, err
+	}
+	result.NodeChosen = chosen
+	result.Alerts, result.Truncated = boundConfigValidationAlerts(result.Alerts)
+	return result, nil
+}
 
+// validateObjectConfigOn validates the configuration of reference on node,
+// its alerts all checked, sorted, the errors first, and not bounded in
+// number: the caller bounds them.
+func (s *Service) validateObjectConfigOn(ctx context.Context, reference ClusterObjectReference, node string) (ObjectConfigValidation, error) {
 	endpoint := fmt.Sprintf("/api/node/name/%s/instance/path/%s/%s/%s/config/validate", node, reference.Namespace, reference.Kind, reference.Name)
 	var response daemonConfigAlertList
 	if err := s.client.GetJSON(ctx, endpoint, nil, &response); err != nil {
@@ -115,7 +127,7 @@ func (s *Service) ValidateObjectConfig(ctx context.Context, options ValidateObje
 		return ObjectConfigValidation{}, shapeErrorf("validate the configuration of %s on %s: the daemon answered %q, not a ConfigAlertList with its items", reference.Path, node, response.Kind)
 	}
 
-	result := ObjectConfigValidation{Object: reference, Node: node, NodeChosen: chosen, Alerts: []ConfigValidationAlert{}}
+	result := ObjectConfigValidation{Object: reference, Node: node, Alerts: []ConfigValidationAlert{}}
 	for _, item := range response.Items {
 		if item.Node != node || (item.Path != "" && item.Path != reference.Path) {
 			return ObjectConfigValidation{}, shapeErrorf("validate the configuration of %s on %s: the daemon answered an alert of %q on %q", reference.Path, node, item.Path, item.Node)
@@ -150,7 +162,6 @@ func (s *Service) ValidateObjectConfig(ctx context.Context, options ValidateObje
 		}
 		return a.Key < b.Key
 	})
-	result.Alerts, result.Truncated = boundConfigValidationAlerts(result.Alerts)
 	switch {
 	case result.ErrorCount > 0:
 		result.Level = configValidationError
