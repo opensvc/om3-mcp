@@ -47,8 +47,8 @@ type ClusterStatusFacts struct {
 	QuorumEnabled         bool     `json:"quorum_enabled" jsonschema:"whether quorum is enabled in the cluster configuration"`
 	IsCompatible          bool     `json:"is_compatible" jsonschema:"the compatibility flag reported by OpenSVC"`
 	IsFrozen              bool     `json:"is_frozen" jsonschema:"true when at least one node is frozen, as the daemon computes it, not a freeze of the whole cluster: the frozen_at of each node says which"`
-	ConfigIssuesTotal     int      `json:"config_issues_total" jsonschema:"number of cluster configuration issues reported by OpenSVC before limiting"`
-	ConfigIssues          []string `json:"config_issues" jsonschema:"cluster configuration issues reported by OpenSVC, limited to 50"`
+	ConfigIssuesTotal     int      `json:"config_issues_total" jsonschema:"number of issues of the cluster configuration reported by OpenSVC before limiting; the configurations of the objects are not counted: validate_object_configs tells them"`
+	ConfigIssues          []string `json:"config_issues" jsonschema:"issues of the cluster configuration reported by OpenSVC, limited to 50; never of an object"`
 	ConfigIssuesTruncated bool     `json:"config_issues_truncated" jsonschema:"whether cluster configuration issues were omitted after the 50-entry limit"`
 }
 

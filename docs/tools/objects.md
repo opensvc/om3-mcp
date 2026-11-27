@@ -5,6 +5,7 @@ tools:
   - get_object_status
   - get_object_config
   - validate_object_config
+  - validate_object_configs
   - list_object_config_keywords
   - list_object_data_keys
   - get_object_data_key
@@ -20,6 +21,7 @@ Implementation:
 
 - business logic: `internal/core/object.go`, `internal/core/object_status.go`,
   `internal/core/config_object.go`, `internal/core/config_object_validate.go`,
+  `internal/core/config_object_validate_many.go`,
   `internal/core/config_object_keyword.go`, and `internal/core/object_data_key.go`;
 - MCP definitions: `internal/tools/object.go`.
 
@@ -39,9 +41,12 @@ which lists the state of the visible actor objects, rather than one
 `list_object_instances` when an aggregate object state requires node-level
 diagnosis. Use `get_object_config` when the diagnosis requires declared driver,
 resource, placement, or orchestration settings.
-Use `validate_object_config` to tell why an object is in validation error or
-warning, as the webapp shows it, or after a write: a keyword the daemon does
-not know is written with a warning the write tools do not return.
+Use `validate_object_configs` to tell which objects have a configuration in
+error or in warning, every object or those of a selector, in one call: the
+status tools and `get_cluster_status`, whose `config_issues` are of the
+cluster configuration only, never tell it. Use `validate_object_config` for
+all the alerts of one object, on a node, or after a write: a keyword the
+daemon does not know is written with a warning the write tools do not return.
 Use `list_object_config_keywords` to discover which options an object kind or
 configured driver supports, their defaults, constraints, and documentation.
 It returns definitions, not the object's configured values.
@@ -640,6 +645,110 @@ a disabled resource), a key source error, an unsupported resource group, a
 missing strategy and a missing keyword. The warnings: unknown keyword, section,
 driver or resource, deprecated or moved keyword or value, ignored keyword,
 conflicting strategies, and a driver unusable on the node.
+
+### `validate_object_configs`
+
+Tells which objects have a configuration in error or in warning, in one call:
+the configurations of the objects a selector names, every object by default,
+each validated on its first node, as the webapp shows them in its list. It is
+one of the tools the model sees without a search: a question such as "which
+services have a bad configuration?" is a question on all of them, which one
+`validate_object_config` an object would not answer within the bounds of a
+turn.
+
+#### OpenSVC API and safety
+
+```text
+GET /api/object?path=<selector>
+GET /api/node/name/<node>/instance/path/<namespace>/<kind>/<name>/config/validate
+```
+
+One read of the object list gives the objects of the selector, the nodes
+holding the configuration of each and its scope; the cluster configuration is
+left out, `get_cluster_status` telling its issues and the daemon validating it
+for root and join only. Each object is validated on the first by name of those
+nodes, else of its scope, four at a time, as the webapp does, at most 50 a
+call: past them, `truncated` and `next_cursor` continue, by path. The objects
+not validated yet may be those in error: the description tells the model to
+continue until `truncated` is false, adding the counts of the calls, before
+concluding, or to narrow the selector, `*/svc/*` for the services. The
+validation of each is that of `validate_object_config`, its answer checked and
+the comments of its secret keywords left out.
+
+The daemon listener grants an address 20 requests a second, in a burst of 100
+(`listener.throttle_rate`, `listener.throttle_burst`), and the MCP is
+one address for all its users: a call of 51 requests stays well under the
+burst. A call stops sending at the first `429` of the daemon, and after 30
+seconds: it answers the objects validated in order before the first one not
+validated, `stopped` telling `throttled` or `deadline`, and `next_cursor`
+continuing there; an object not validated is never counted. A request that
+does not reach a node, its timeout spent, fails that object; after 3 of them,
+the other objects of that node fail without a request.
+
+The daemon validates for the administrators of a namespace, the cluster
+administrators and root only. An object it refuses is counted in
+`refused_objects` and named in `refused`, never counted valid; one whose
+validation fails otherwise, such as a node not answering, in `failed_objects`,
+and `failed` groups them by reason. The call fails instead of answering counts
+that would read as nothing to tell: a token the daemon refuses (`401`), a
+daemon this MCP cannot use (`daemon_incompatible`, such as a daemon older than
+v3.0.0-rc55 without the validation route), a `429` or the deadline before any
+object, and a page whose validations all failed. A selector naming no object
+the caller sees answers a `note`; a configuration term in the selector reads
+only the configurations the answering node holds (`term_note`).
+
+The object list holds the whole status of each object, about 4 KiB: past
+about 2 000 objects, it exceeds the 10 MiB the MCP reads of an answer, and a
+call on `**` fails; a narrower selector holds fewer.
+
+#### MCP properties
+
+This tool is read-only, non-destructive, closed-world, and has no side effects.
+
+#### Input
+
+| Field | Required | Default | Bounds | Meaning |
+|---|---:|---:|---:|---|
+| `selector` | No | `**` | 512 characters | Object selector, as `list_cluster_objects` takes it |
+| `cursor` | No | — | 1024 characters | `next_cursor` of a previous call with the same selector |
+
+#### Example output
+
+```json
+{
+  "provenance": {"source": "opensvc_daemon", "observed_at": "2026-11-26T18:00:00Z"},
+  "selector": "**",
+  "total": 84,
+  "validated": 50,
+  "error_objects": 0,
+  "warning_objects": 3,
+  "valid_objects": 47,
+  "refused_objects": 0,
+  "failed_objects": 0,
+  "objects": [
+    {
+      "path": "data/vol/lake-01-data",
+      "node": "dev5n1",
+      "level": "warning",
+      "error_count": 0,
+      "warning_count": 1,
+      "alerts": [
+        {"level": "warning", "kind": "unknown keyword", "key": "disk#0.name", "driver": "disk.loop", "comment": "keyword does not exist: \"disk#0.name\""}
+      ],
+      "alerts_truncated": false
+    }
+  ],
+  "truncated": true,
+  "next_cursor": "hr/svc/db-01"
+}
+```
+
+Every object of the call in error or in warning is listed, in error first,
+then by path. 100 alerts are shared among them, one each at least, errors
+first then by key (`alerts_truncated`), within 32 KiB of comments together:
+the counts are of all. The counts are of the call: those of a selector
+validated in several calls add up. `validate_object_config` gives all the
+alerts of one object, or validates it on another node.
 
 ## Errors
 

@@ -164,8 +164,12 @@ daemon-reported `is_compatible` and `is_frozen` flags. The daemon sets
 of the whole cluster, and the `frozen_at` of each node says which one; the
 tool description says so, a model reading `true` having answered that the
 cluster was frozen instead of naming the node. Configuration issues are
-OpenSVC-provided strings, not MCP conclusions. They are limited to 50 with
-`config_issues_total` and `config_issues_truncated`.
+OpenSVC-provided strings, not MCP conclusions, of the cluster configuration
+only: the objects are not counted, and `validate_object_configs` tells those
+whose configuration is in error or in warning, which the description of the
+tool says, a model having answered no object had a configuration issue from
+`config_issues_total: 0`. They are limited to 50 with `config_issues_total`
+and `config_issues_truncated`.
 
 #### Node facts
 

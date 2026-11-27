@@ -40,7 +40,7 @@ func NewExchange(catalog *clusterconfig.Catalog, profiles *mcpauth.ExchangeProfi
 		}
 		base := &http.Transport{
 			TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots, InsecureSkipVerify: cluster.TLSInsecure},
-			TLSHandshakeTimeout: cluster.RequestTimeout, IdleConnTimeout: 90 * time.Second, MaxIdleConns: 2, MaxIdleConnsPerHost: 2,
+			TLSHandshakeTimeout: cluster.RequestTimeout, IdleConnTimeout: 90 * time.Second, MaxIdleConns: 4, MaxIdleConnsPerHost: 4,
 		}
 		client := &http.Client{Transport: &exchangedTransport{base: base, target: cluster.ID, origin: cluster.Endpoint}, Timeout: cluster.RequestTimeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}

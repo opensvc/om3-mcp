@@ -25,7 +25,7 @@ documents describe the implemented tool contracts.
 | Daemon | `list_daemon_executions`, `list_daemon_orchestrations`, `list_dns_records`, `get_daemon_log_level` | [Daemon tools](daemon.md) |
 | Cluster | `get_cluster_config`, `get_cluster_status`, `list_cluster_locks`, `get_relay_status` | [Cluster tools](cluster.md) |
 | Node | `get_node_config`, `get_node_config_keywords`, `list_node_config_keywords`, `get_node_status`, `get_node_logs`, `list_node_properties`, `list_node_hardware`, `list_node_packages`, `get_node_daemon_metrics`, `probe_node_reachability`, `list_node_capabilities`, `list_node_drivers`, `list_node_disks`, `get_node_san_topology`, `list_node_ip_addresses`, `list_node_network_reservations`, `list_node_locks`, `get_node_drbd_config` | [Node tools](node.md) |
-| Objects | `list_cluster_objects`, `get_object_status`, `get_object_config`, `validate_object_config`, `list_object_config_keywords`, `list_object_data_keys`, `get_object_data_key` | [Object tools](objects.md) |
+| Objects | `list_cluster_objects`, `get_object_status`, `get_object_config`, `validate_object_config`, `validate_object_configs`, `list_object_config_keywords`, `list_object_data_keys`, `get_object_data_key` | [Object tools](objects.md) |
 | Instances | `list_object_instances`, `get_instance_status`, `get_instance_logs`, `refresh_instance_status`, `list_instance_sync_snapshots`, `get_instance_resource_file` | [Instance tools](instances.md) |
 | Resources | `list_cluster_ip_resources`, `list_object_resources`, `list_resource_info`, `get_container_logs` | [Resource tools](resources.md) |
 | Scheduler | `list_schedules` | [Scheduler tools](schedules.md) |
@@ -53,7 +53,8 @@ catalog:
   the model does not see them.
 - `opensvc/core`: true for the tools always shown, the others being found by
   a search: `get_cluster_status`, `list_cluster_objects`, `get_object_status`,
-  `get_instance_status`, `get_node_status` and `get_caller_identity`.
+  `get_instance_status`, `get_node_status`, `get_caller_identity` and
+  `validate_object_configs`.
 
 Two more keys concern the confirmation of a call, see
 [preview tools](previews.md): `opensvc/preview_tool` and
@@ -187,6 +188,7 @@ are representative and will differ between calls.
 | `get_object_status` | Yes | No | Visibility on the object namespace |
 | `get_object_config` | Yes | No | Visibility on the object namespace |
 | `validate_object_config` | Yes | No | `admin` of the object namespace, or `root` |
+| `validate_object_configs` | Yes | No | Visible namespaces; each object validated for `admin` of its namespace, or `root`, the others counted refused |
 | `list_object_config_keywords` | Yes | No | `guest` or higher on the object namespace |
 | `get_object_data_key` | Yes | No | `guest` or higher on the namespace of the cfg; sec and usr refused |
 | `list_object_instances` | Yes | No | Visibility on the object namespace |

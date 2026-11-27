@@ -28,6 +28,7 @@ type ObjectStatus struct {
 }
 
 type daemonObjectList struct {
+	Kind  string             `json:"kind"`
 	Items []daemonObjectItem `json:"items"`
 }
 
